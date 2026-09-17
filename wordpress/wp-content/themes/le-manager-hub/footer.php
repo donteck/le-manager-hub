@@ -1,0 +1,1 @@
+<footer class="lmh-footer"><div class="lmh-shell"><strong>LE MANAGER HUB</strong><p>The Global Music Industry Hub</p><p>Talent • Brand • Opportunities • Community</p></div></footer><?php wp_footer();?></body></html>
