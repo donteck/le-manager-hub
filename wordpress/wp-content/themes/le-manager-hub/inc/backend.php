@@ -20,6 +20,7 @@ final class LMH_Backend {
     add_action('admin_menu',[__CLASS__,'admin_menu']);
     add_action('admin_post_lmh_review_profile',[__CLASS__,'review_profile']);
     add_action('admin_post_lmh_booking_status',[__CLASS__,'admin_booking_status']);
+    add_action('template_redirect',[__CLASS__,'qr_routes']);
   }
 
   private static function generate_lmid() {
@@ -56,6 +57,35 @@ final class LMH_Backend {
       'since'=>(string)get_user_meta($user_id,'_lmh_member_since',true),
       'card_status'=>sanitize_key(get_user_meta($user_id,'_lmh_card_status',true)?:'digital'),
     ];
+  }
+
+  private static function qr_token($user_id) {
+    $token=(string)get_user_meta($user_id,'_lmh_qr_token',true);
+    if(!$token){$token=wp_generate_password(40,false,false);update_user_meta($user_id,'_lmh_qr_token',$token);}
+    return $token;
+  }
+
+  public static function verification_url($user_id) {
+    return add_query_arg(['lmh_verify'=>$user_id,'token'=>self::qr_token($user_id)],home_url('/'));
+  }
+
+  public static function recruitment_url($user_id) {
+    $m=self::member_identity($user_id);
+    return add_query_arg(['lmh_join'=>'1','ref'=>$m['id']],home_url('/'));
+  }
+
+  public static function qr_routes() {
+    if(isset($_GET['lmh_verify'])){
+      $uid=absint($_GET['lmh_verify']);$token=sanitize_text_field(wp_unslash($_GET['token']??''));$stored=(string)get_user_meta($uid,'_lmh_qr_token',true);
+      status_header(200);nocache_headers();get_header();
+      echo '<main class="lmh-section"><div class="lmh-shell lmh-reading"><div class="lmh-kicker">Le Manager Secure Verification</div>';
+      if($uid&&$stored&&hash_equals($stored,$token)){$u=get_user_by('id',$uid);$m=self::member_identity($uid);echo '<h1 class="lmh-title">Membership Verified</h1><p><strong>'.esc_html($u?$u->display_name:'Le Manager Member').'</strong></p><p>LMID '.esc_html(substr($m['id'],0,3).' '.substr($m['id'],3,3).' '.substr($m['id'],6,3)).'</p><p>Level: '.esc_html(strtoupper($m['level'])).' · Status: '.esc_html(strtoupper($m['status'])).'</p>';}else{echo '<h1 class="lmh-title">Unable to Verify</h1><p>This membership credential is invalid or no longer active.</p>';}
+      echo '</div></main>';get_footer();exit;
+    }
+    if(isset($_GET['lmh_join'])){
+      $ref=preg_replace('/\D/','',(string)($_GET['ref']??''));if(strlen($ref)===9)setcookie('lmh_ref',$ref,time()+30*DAY_IN_SECONDS,COOKIEPATH?:'/',COOKIE_DOMAIN,is_ssl(),true);
+      wp_safe_redirect(lmh_url('join'));exit;
+    }
   }
 
   public static function roles() {
