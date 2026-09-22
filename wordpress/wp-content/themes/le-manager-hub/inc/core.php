@@ -147,6 +147,8 @@ final class LMH_Theme_Core {
       update_user_meta($id,'_lmh_join_artist_id',$artist);
     }
 
+    $campaign_id=absint($_COOKIE['lmh_campaign_id']??0);
+    if($campaign_id && class_exists('LMH_Backend')) LMH_Backend::record_campaign_join($campaign_id,$id);
     if(class_exists('LMH_Backend')) $identity=LMH_Backend::member_identity($id); else $identity=['id'=>(string)get_user_meta($id,'_lmh_member_id',true)];
     return new WP_REST_Response(['success'=>true,'user_id'=>$id,'role'=>$role,'lmid'=>$identity['id']??'','artist_id'=>$artist?:0],201);
   }
