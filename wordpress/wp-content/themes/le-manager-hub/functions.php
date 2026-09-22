@@ -8,6 +8,7 @@ if (class_exists('LMH_Core')) {
 }
 require_once get_template_directory().'/inc/core.php';
 require_once get_template_directory().'/inc/hub.php';
+require_once get_template_directory().'/inc/backend.php';
 add_action('after_switch_theme',function(){LMH_Theme_Core::activate();});
 function lmh_theme_setup(){add_theme_support('post-thumbnails');add_theme_support('custom-logo');register_nav_menus(['primary'=>'Primary Menu']);}
 add_action('after_setup_theme','lmh_theme_setup');
