@@ -98,6 +98,16 @@ final class LMH_Backend {
       'website'=>esc_url_raw($r->get_param('website')),
       'services'=>sanitize_textarea_field($r->get_param('services')),
       'booking_email'=>sanitize_email($r->get_param('booking_email')),
+      'phone'=>sanitize_text_field($r->get_param('phone')),
+      'languages'=>sanitize_text_field($r->get_param('languages')),
+      'availability'=>sanitize_text_field($r->get_param('availability')),
+      'achievements'=>sanitize_textarea_field($r->get_param('achievements')),
+      'portfolio_url'=>esc_url_raw($r->get_param('portfolio_url')),
+      'cover_image_url'=>esc_url_raw($r->get_param('cover_image_url')),
+      'instagram'=>esc_url_raw($r->get_param('instagram')),
+      'tiktok'=>esc_url_raw($r->get_param('tiktok')),
+      'facebook'=>esc_url_raw($r->get_param('facebook')),
+      'x'=>esc_url_raw($r->get_param('x')),
     ];
   }
 
@@ -110,7 +120,7 @@ final class LMH_Backend {
     if(is_wp_error($id)) return $id;
     update_post_meta($id,'_lmh_owner_user_id',get_current_user_id());
     update_post_meta($id,'_lmh_verified_level','pending');
-    foreach(['city','website','services','booking_email'] as $key) if($data[$key]!=='') update_post_meta($id,'_lmh_'.$key,$data[$key]);
+    foreach(['city','website','services','booking_email','phone','languages','availability','achievements','portfolio_url','cover_image_url','instagram','tiktok','facebook','x'] as $key) if($data[$key]!=='') update_post_meta($id,'_lmh_'.$key,$data[$key]);
     return new WP_REST_Response(['success'=>true,'id'=>$id,'status'=>'pending','verification'=>'pending'],201);
   }
 
@@ -120,7 +130,7 @@ final class LMH_Backend {
     $data=self::profile_payload($r);
     $post=[]; if($data['name']!=='')$post['post_title']=$data['name']; if($r->has_param('bio'))$post['post_content']=$data['bio'];
     if($post){$post['ID']=$id;$saved=wp_update_post($post,true);if(is_wp_error($saved))return $saved;}
-    foreach(['city','website','services','booking_email'] as $key) if($r->has_param($key)) update_post_meta($id,'_lmh_'.$key,$data[$key]);
+    foreach(['city','website','services','booking_email','phone','languages','availability','achievements','portfolio_url','cover_image_url','instagram','tiktok','facebook','x'] as $key) if($r->has_param($key)) update_post_meta($id,'_lmh_'.$key,$data[$key]);
     if(!current_user_can('manage_options') && get_post_status($id)==='publish') update_post_meta($id,'_lmh_profile_updated_at',current_time('mysql'));
     return ['success'=>true,'id'=>$id,'status'=>get_post_status($id),'verification'=>get_post_meta($id,'_lmh_verified_level',true)?:'unverified'];
   }
