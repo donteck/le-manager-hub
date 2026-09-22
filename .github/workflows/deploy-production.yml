@@ -1,0 +1,51 @@
+name: Deploy Le Manager Production
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "wordpress/wp-content/themes/le-manager-hub/**"
+      - ".github/workflows/deploy-production.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: le-manager-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to Hestia
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Configure SSH
+        env:
+          HESTIA_HOST: ${{ secrets.HESTIA_HOST }}
+          HESTIA_PORT: ${{ secrets.HESTIA_PORT }}
+          HESTIA_SSH_KEY: ${{ secrets.HESTIA_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$HESTIA_SSH_KEY" > ~/.ssh/lemanager
+          chmod 600 ~/.ssh/lemanager
+          ssh-keyscan -p "$HESTIA_PORT" -H "$HESTIA_HOST" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy production
+        env:
+          HESTIA_HOST: ${{ secrets.HESTIA_HOST }}
+          HESTIA_USER: ${{ secrets.HESTIA_USER }}
+          HESTIA_PORT: ${{ secrets.HESTIA_PORT }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/lemanager \
+            -p "$HESTIA_PORT" \
+            -o BatchMode=yes \
+            "$HESTIA_USER@$HESTIA_HOST" \
+            "/home/lemanage/bin/deploy-le-manager.sh"
