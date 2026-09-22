@@ -122,7 +122,33 @@ final class LMH_Theme_Core {
     $id = wp_create_user($username,$password,$email);
     if (is_wp_error($id)) return $id;
     wp_update_user(['ID'=>$id,'display_name'=>$name ?: $username,'role'=>$role]);
-    return new WP_REST_Response(['success'=>true,'user_id'=>$id,'role'=>$role],201);
+
+    // Smart QR / referral attribution. Every successfully created member receives
+    // an LMID through the user_register hook; the campaign/referrer is then linked.
+    $ref=preg_replace('/\\D/','',(string)$r->get_param('ref'));
+    if(!$ref && isset($_COOKIE['lmh_ref'])) $ref=preg_replace('/\\D/','',(string)wp_unslash($_COOKIE['lmh_ref']));
+    if(strlen($ref)===9){
+      global $wpdb;
+      $referrer=(int)$wpdb->get_var($wpdb->prepare("SELECT user_id FROM {$wpdb->usermeta} WHERE meta_key='_lmh_member_id' AND meta_value=%s LIMIT 1",$ref));
+      if($referrer && $referrer!==$id){
+        update_user_meta($id,'_lmh_referrer_user_id',$referrer);
+        update_user_meta($id,'_lmh_referrer_lmid',$ref);
+        update_user_meta($id,'_lmh_join_source','smart_qr');
+        update_user_meta($id,'_lmh_join_at',current_time('mysql'));
+      }
+    }
+
+    $artist=absint($r->get_param('artist_id'));
+    if($artist && get_post_type($artist)==='lmh_artist' && get_post_status($artist)==='publish'){
+      $following=(array)get_user_meta($id,'lmh_following',true);
+      $following=array_values(array_filter(array_unique(array_map('intval',$following))));
+      if(!in_array($artist,$following,true)) $following[]=$artist;
+      update_user_meta($id,'lmh_following',$following);
+      update_user_meta($id,'_lmh_join_artist_id',$artist);
+    }
+
+    if(class_exists('LMH_Backend')) $identity=LMH_Backend::member_identity($id); else $identity=['id'=>(string)get_user_meta($id,'_lmh_member_id',true)];
+    return new WP_REST_Response(['success'=>true,'user_id'=>$id,'role'=>$role,'lmid'=>$identity['id']??'','artist_id'=>$artist?:0],201);
   }
 
   public static function me() {
