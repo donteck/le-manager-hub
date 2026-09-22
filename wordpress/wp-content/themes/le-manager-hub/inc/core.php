@@ -67,9 +67,9 @@ final class LMH_Theme_Core {
     ]);
 
     $meta = [
-      'lmh_artist'=>['city','website','spotify','apple_music','youtube','booking_email','verified_level'],
-      'lmh_professional'=>['city','company','website','services','languages','availability','verified_level'],
-      'lmh_company'=>['city','website','email','phone','verified_level'],
+      'lmh_artist'=>['city','website','spotify','apple_music','youtube','instagram','tiktok','facebook','x','booking_email','phone','services','languages','availability','achievements','portfolio_url','cover_image_url','verified_level'],
+      'lmh_professional'=>['city','company','website','instagram','tiktok','facebook','x','booking_email','phone','services','languages','availability','achievements','portfolio_url','cover_image_url','verified_level'],
+      'lmh_company'=>['city','website','email','phone','instagram','tiktok','facebook','x','services','languages','availability','achievements','portfolio_url','cover_image_url','verified_level'],
       'lmh_event'=>['start_datetime','end_datetime','venue','city','ticket_url','age_requirement'],
       'lmh_opportunity'=>['deadline','city','compensation','application_url'],
       'lmh_booking'=>['requester_id','talent_id','event_id','event_date','status','budget','message'],
