@@ -15,6 +15,9 @@ final class LMH_Backend {
     add_action('rest_api_init',[__CLASS__,'routes']);
     add_filter('manage_lmh_booking_posts_columns',[__CLASS__,'booking_columns']);
     add_action('manage_lmh_booking_posts_custom_column',[__CLASS__,'booking_column'],10,2);
+    add_action('admin_menu',[__CLASS__,'admin_menu']);
+    add_action('admin_post_lmh_review_profile',[__CLASS__,'review_profile']);
+    add_action('admin_post_lmh_booking_status',[__CLASS__,'admin_booking_status']);
   }
 
   public static function roles() {
@@ -146,6 +149,65 @@ final class LMH_Backend {
       'status'=>$p->post_status,'verification'=>get_post_meta($p->ID,'_lmh_verified_level',true)?:'unverified',
       'edit_url'=>current_user_can('edit_post',$p->ID)?get_edit_post_link($p->ID,'raw'):null
     ];},$q->posts);
+  }
+
+
+  public static function admin_menu() {
+    add_menu_page('Le Manager Control Center','Le Manager','manage_options','lmh-control',[__CLASS__,'control_center'],'dashicons-networking',3);
+  }
+
+  public static function control_center() {
+    if(!current_user_can('manage_options')) return;
+    $pending=new WP_Query(['post_type'=>['lmh_artist','lmh_professional','lmh_company'],'post_status'=>['pending','draft'],'posts_per_page'=>50,'orderby'=>'date','order'=>'DESC']);
+    $bookings=new WP_Query(['post_type'=>'lmh_booking','post_status'=>'private','posts_per_page'=>25,'orderby'=>'date','order'=>'DESC']);
+    $counts=[
+      'artists'=>(int)(wp_count_posts('lmh_artist')->publish??0),
+      'professionals'=>(int)(wp_count_posts('lmh_professional')->publish??0),
+      'companies'=>(int)(wp_count_posts('lmh_company')->publish??0),
+      'pending'=>(int)$pending->found_posts,
+      'bookings'=>(int)$bookings->found_posts
+    ];
+    echo '<div class="wrap"><h1>Le Manager Control Center</h1><p>Manage the professional network, verification and booking workflow.</p>';
+    echo '<div style="display:flex;gap:12px;flex-wrap:wrap;margin:20px 0">';
+    foreach($counts as $label=>$count) echo '<div style="background:#fff;border:1px solid #dcdcde;padding:16px 22px;min-width:130px"><strong style="font-size:24px">'.esc_html($count).'</strong><br>'.esc_html(ucwords($label)).'</div>';
+    echo '</div><h2>Profiles Awaiting Review</h2>';
+    if(!$pending->have_posts()) echo '<p>No profiles are awaiting review.</p>';
+    else {echo '<table class="widefat striped"><thead><tr><th>Profile</th><th>Type</th><th>Owner</th><th>Submitted</th><th>Action</th></tr></thead><tbody>';
+      foreach($pending->posts as $p){$owner=(int)get_post_meta($p->ID,'_lmh_owner_user_id',true);$u=$owner?get_user_by('id',$owner):false;
+        echo '<tr><td><strong>'.esc_html(get_the_title($p)).'</strong></td><td>'.esc_html(ucwords(str_replace(['lmh_','_'],['',' '],$p->post_type))).'</td><td>'.esc_html($u?$u->display_name:'Unassigned').'</td><td>'.esc_html(get_the_date('', $p)).'</td><td>';
+        foreach(['approve'=>'Approve','verify'=>'Approve + Verify','decline'=>'Decline'] as $action=>$label){$url=wp_nonce_url(admin_url('admin-post.php?action=lmh_review_profile&profile_id='.$p->ID.'&decision='.$action),'lmh_review_'.$p->ID);echo '<a class="button" style="margin-right:5px" href="'.esc_url($url).'">'.esc_html($label).'</a>';}
+        echo '</td></tr>';
+      } echo '</tbody></table>';
+    }
+    echo '<h2 style="margin-top:30px">Recent Booking Requests</h2>';
+    if(!$bookings->have_posts()) echo '<p>No booking requests yet.</p>';
+    else {echo '<table class="widefat striped"><thead><tr><th>Booking</th><th>Requester</th><th>Talent</th><th>Event Date</th><th>Status</th><th>Update</th></tr></thead><tbody>';
+      foreach($bookings->posts as $b){$requester=(int)get_post_meta($b->ID,'_lmh_requester_id',true);$ru=$requester?get_user_by('id',$requester):false;$talent=(int)get_post_meta($b->ID,'_lmh_talent_id',true);$status=get_post_meta($b->ID,'_lmh_status',true)?:'new';
+        echo '<tr><td>#'.esc_html($b->ID).'</td><td>'.esc_html($ru?$ru->display_name:'Unknown').'</td><td>'.esc_html($talent?get_the_title($talent):'—').'</td><td>'.esc_html(get_post_meta($b->ID,'_lmh_event_date',true)).'</td><td><strong>'.esc_html(ucwords($status)).'</strong></td><td><form method="post" action="'.esc_url(admin_url('admin-post.php')).'"><input type="hidden" name="action" value="lmh_booking_status"><input type="hidden" name="booking_id" value="'.esc_attr($b->ID).'">'.wp_nonce_field('lmh_booking_'.$b->ID,'_wpnonce',true,false).'<select name="status">';
+        foreach(self::BOOKING_STATUSES as $s) echo '<option value="'.esc_attr($s).'" '.selected($status,$s,false).'>'.esc_html(ucwords($s)).'</option>';
+        echo '</select> <button class="button">Update</button></form></td></tr>';
+      } echo '</tbody></table>';
+    }
+    echo '</div>';
+  }
+
+  public static function review_profile() {
+    if(!current_user_can('manage_options')) wp_die('Not allowed.');
+    $id=absint($_GET['profile_id']??0); check_admin_referer('lmh_review_'.$id);
+    if(!in_array(get_post_type($id),['lmh_artist','lmh_professional','lmh_company'],true)) wp_die('Profile not found.');
+    $decision=sanitize_key($_GET['decision']??'');
+    if($decision==='approve'){wp_update_post(['ID'=>$id,'post_status'=>'publish']);update_post_meta($id,'_lmh_verified_level','unverified');}
+    elseif($decision==='verify'){wp_update_post(['ID'=>$id,'post_status'=>'publish']);update_post_meta($id,'_lmh_verified_level','verified');}
+    elseif($decision==='decline'){wp_update_post(['ID'=>$id,'post_status'=>'draft']);update_post_meta($id,'_lmh_verified_level','unverified');}
+    wp_safe_redirect(admin_url('admin.php?page=lmh-control')); exit;
+  }
+
+  public static function admin_booking_status() {
+    if(!current_user_can('manage_options')) wp_die('Not allowed.');
+    $id=absint($_POST['booking_id']??0); check_admin_referer('lmh_booking_'.$id);
+    $status=sanitize_key($_POST['status']??'');
+    if(get_post_type($id)==='lmh_booking' && in_array($status,self::BOOKING_STATUSES,true)){update_post_meta($id,'_lmh_status',$status);update_post_meta($id,'_lmh_status_updated_at',current_time('mysql'));update_post_meta($id,'_lmh_status_updated_by',get_current_user_id());}
+    wp_safe_redirect(admin_url('admin.php?page=lmh-control')); exit;
   }
 
   public static function booking_columns($cols) {
