@@ -1,0 +1,1 @@
+<?php get_header();?><main id="main" class="lmh-section"><div class="lmh-shell"><h1 class="lmh-title">Page not found</h1><p>Let’s get you back to the music.</p><a class="lmh-btn" href="<?php echo esc_url(home_url('/'));?>">BACK TO THE HUB</a></div></main><?php get_footer();?>
