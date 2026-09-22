@@ -12,7 +12,17 @@
 <label>City<input name="city" maxlength="120"></label>
 <label>Website<input name="website" type="url" placeholder="https://"></label>
 <label>Booking Email<input name="booking_email" type="email"></label>
+<label>Phone<input name="phone" type="tel"></label>
+<label>Languages<input name="languages" placeholder="English, French, Haitian Creole…"></label>
+<label>Availability<input name="availability" placeholder="Available for bookings, weekends, touring…"></label>
 <label>Services<textarea name="services" rows="3" placeholder="Management, production, booking, promotion…"></textarea></label>
+<label>Achievements<textarea name="achievements" rows="3" placeholder="Awards, notable projects, milestones…"></textarea></label>
+<label>Portfolio URL<input name="portfolio_url" type="url" placeholder="https://"></label>
+<label>Cover Image URL<input name="cover_image_url" type="url" placeholder="https://"></label>
+<label>Instagram<input name="instagram" type="url" placeholder="https://instagram.com/..."></label>
+<label>TikTok<input name="tiktok" type="url" placeholder="https://tiktok.com/@..."></label>
+<label>Facebook<input name="facebook" type="url" placeholder="https://facebook.com/..."></label>
+<label>X / Twitter<input name="x" type="url" placeholder="https://x.com/..."></label>
 <label>Bio<textarea name="bio" rows="6" maxlength="3000"></textarea></label>
 <button class="lmh-btn" type="submit">SUBMIT PROFILE FOR REVIEW</button>
 <p id="lmh-profile-status" role="status" aria-live="polite"></p>
