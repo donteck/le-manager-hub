@@ -20,7 +20,63 @@ final class LMH_Backend {
     add_action('admin_menu',[__CLASS__,'admin_menu']);
     add_action('admin_post_lmh_review_profile',[__CLASS__,'review_profile']);
     add_action('admin_post_lmh_booking_status',[__CLASS__,'admin_booking_status']);
+    add_action('admin_post_lmh_create_qr_campaign',[__CLASS__,'admin_create_qr_campaign']);
     add_action('template_redirect',[__CLASS__,'qr_routes']);
+    add_action('init',[__CLASS__,'register_qr_campaign']);
+  }
+
+  public static function register_qr_campaign() {
+    register_post_type('lmh_qr_campaign',[
+      'labels'=>['name'=>'QR Campaigns','singular_name'=>'QR Campaign'],
+      'public'=>false,'show_ui'=>true,'show_in_menu'=>false,'supports'=>['title'],
+      'capability_type'=>'post','map_meta_cap'=>true
+    ]);
+  }
+
+  private static function unique_campaign_code() {
+    for($i=0;$i<30;$i++){
+      $code=strtoupper(wp_generate_password(8,false,false));
+      $q=new WP_Query(['post_type'=>'lmh_qr_campaign','post_status'=>'any','posts_per_page'=>1,'fields'=>'ids','meta_key'=>'_lmh_qr_code','meta_value'=>$code]);
+      if(!$q->have_posts()) return $code;
+    }
+    return strtoupper(wp_generate_password(12,false,false));
+  }
+
+  public static function campaign_url($campaign_id) {
+    $code=(string)get_post_meta($campaign_id,'_lmh_qr_code',true);
+    return $code?add_query_arg('lmh_campaign',$code,home_url('/')):'';
+  }
+
+  public static function admin_create_qr_campaign() {
+    if(!current_user_can('manage_options')) wp_die('Not allowed.');
+    check_admin_referer('lmh_create_qr_campaign');
+    $label=sanitize_text_field($_POST['label']??'');
+    $artist=absint($_POST['artist_id']??0);
+    $referrer=absint($_POST['referrer_user_id']??0);
+    if(!$label) $label='QR Campaign '.current_time('Y-m-d H:i');
+    if($artist && (get_post_type($artist)!=='lmh_artist'||get_post_status($artist)!=='publish')) $artist=0;
+    if($referrer && !get_user_by('id',$referrer)) $referrer=0;
+    $id=wp_insert_post(['post_type'=>'lmh_qr_campaign','post_status'=>'publish','post_title'=>$label],true);
+    if(!is_wp_error($id)){
+      update_post_meta($id,'_lmh_qr_code',self::unique_campaign_code());
+      update_post_meta($id,'_lmh_qr_artist_id',$artist);
+      update_post_meta($id,'_lmh_qr_referrer_user_id',$referrer);
+      update_post_meta($id,'_lmh_qr_scans',0);
+      update_post_meta($id,'_lmh_qr_joins',0);
+      update_post_meta($id,'_lmh_qr_status','active');
+    }
+    wp_safe_redirect(admin_url('admin.php?page=lmh-control#smart-qr'));exit;
+  }
+
+  private static function campaign_by_code($code) {
+    $q=new WP_Query(['post_type'=>'lmh_qr_campaign','post_status'=>'publish','posts_per_page'=>1,'meta_key'=>'_lmh_qr_code','meta_value'=>sanitize_text_field($code)]);
+    return $q->have_posts()?$q->posts[0]:null;
+  }
+
+  public static function record_campaign_join($campaign_id,$user_id) {
+    if(!$campaign_id||get_post_type($campaign_id)!=='lmh_qr_campaign') return;
+    update_post_meta($campaign_id,'_lmh_qr_joins',(int)get_post_meta($campaign_id,'_lmh_qr_joins',true)+1);
+    update_user_meta($user_id,'_lmh_join_campaign_id',$campaign_id);
   }
 
   private static function generate_lmid() {
@@ -77,6 +133,22 @@ final class LMH_Backend {
   }
 
   public static function qr_routes() {
+    if(isset($_GET['lmh_campaign'])){
+      $campaign=self::campaign_by_code(sanitize_text_field(wp_unslash($_GET['lmh_campaign'])));
+      if(!$campaign || get_post_meta($campaign->ID,'_lmh_qr_status',true)==='inactive'){status_header(404);return;}
+      $cookie='lmh_campaign_seen_'.$campaign->ID;
+      if(empty($_COOKIE[$cookie])){
+        update_post_meta($campaign->ID,'_lmh_qr_scans',(int)get_post_meta($campaign->ID,'_lmh_qr_scans',true)+1);
+        setcookie($cookie,'1',time()+DAY_IN_SECONDS,COOKIEPATH?:'/',COOKIE_DOMAIN,is_ssl(),true);
+      }
+      setcookie('lmh_campaign_id',(string)$campaign->ID,time()+30*DAY_IN_SECONDS,COOKIEPATH?:'/',COOKIE_DOMAIN,is_ssl(),true);
+      $artist=(int)get_post_meta($campaign->ID,'_lmh_qr_artist_id',true);
+      $referrer=(int)get_post_meta($campaign->ID,'_lmh_qr_referrer_user_id',true);
+      if($referrer){$m=self::member_identity($referrer);if(!empty($m['id']))setcookie('lmh_ref',$m['id'],time()+30*DAY_IN_SECONDS,COOKIEPATH?:'/',COOKIE_DOMAIN,is_ssl(),true);}
+      if($artist)setcookie('lmh_join_artist',(string)$artist,time()+30*DAY_IN_SECONDS,COOKIEPATH?:'/',COOKIE_DOMAIN,is_ssl(),true);
+      $join=lmh_url('join');if($artist)$join=add_query_arg('artist',$artist,$join);
+      wp_safe_redirect($join);exit;
+    }
     if(isset($_GET['lmh_verify'])){
       $uid=absint($_GET['lmh_verify']);$token=sanitize_text_field(wp_unslash($_GET['token']??''));$stored=(string)get_user_meta($uid,'_lmh_qr_token',true);
       status_header(200);nocache_headers();get_header();
@@ -253,6 +325,9 @@ final class LMH_Backend {
       'bookings'=>(int)$bookings->found_posts
     ];
     echo '<div class="wrap"><h1>Le Manager Control Center</h1><p>Manage the professional network, verification and booking workflow.</p>';
+    $campaigns=new WP_Query(['post_type'=>'lmh_qr_campaign','post_status'=>'publish','posts_per_page'=>25,'orderby'=>'date','order'=>'DESC']);
+    echo '<div id="smart-qr" style="margin:28px 0"><h2>Smart QR Campaigns</h2><form method="post" action="'.esc_url(admin_url('admin-post.php')).'" style="background:#fff;border:1px solid #dcdcde;padding:16px;margin-bottom:16px"><input type="hidden" name="action" value="lmh_create_qr_campaign">'.wp_nonce_field('lmh_create_qr_campaign','_wpnonce',true,false).'<p><input name="label" class="regular-text" placeholder="Campaign name" required> <input name="artist_id" type="number" min="0" placeholder="Artist post ID"> <input name="referrer_user_id" type="number" min="0" placeholder="Ambassador user ID"> <button class="button button-primary">Create Smart QR Campaign</button></p></form>';
+    if($campaigns->have_posts()){echo '<table class="widefat striped"><thead><tr><th>Campaign</th><th>Code</th><th>Artist</th><th>Scans</th><th>Joins</th><th>Conversion</th><th>URL</th></tr></thead><tbody>';foreach($campaigns->posts as $q){$sc=(int)get_post_meta($q->ID,'_lmh_qr_scans',true);$jo=(int)get_post_meta($q->ID,'_lmh_qr_joins',true);$aid=(int)get_post_meta($q->ID,'_lmh_qr_artist_id',true);$rate=$sc?round(($jo/$sc)*100,1):0;echo '<tr><td>'.esc_html(get_the_title($q)).'</td><td><code>'.esc_html(get_post_meta($q->ID,'_lmh_qr_code',true)).'</code></td><td>'.esc_html($aid?get_the_title($aid):'General').'</td><td>'.esc_html($sc).'</td><td>'.esc_html($jo).'</td><td>'.esc_html($rate).'%</td><td><input class="large-text" readonly value="'.esc_attr(self::campaign_url($q->ID)).'"></td></tr>';}echo '</tbody></table>';}else echo '<p>No Smart QR campaigns yet.</p>';echo '</div>';
     echo '<div style="display:flex;gap:12px;flex-wrap:wrap;margin:20px 0">';
     foreach($counts as $label=>$count) echo '<div style="background:#fff;border:1px solid #dcdcde;padding:16px 22px;min-width:130px"><strong style="font-size:24px">'.esc_html($count).'</strong><br>'.esc_html(ucwords($label)).'</div>';
     echo '</div><h2>Profiles Awaiting Review</h2>';
