@@ -69,9 +69,11 @@ final class LMH_Backend {
     return add_query_arg(['lmh_verify'=>$user_id,'token'=>self::qr_token($user_id)],home_url('/'));
   }
 
-  public static function recruitment_url($user_id) {
+  public static function recruitment_url($user_id,$artist_id=0) {
     $m=self::member_identity($user_id);
-    return add_query_arg(['lmh_join'=>'1','ref'=>$m['id']],home_url('/'));
+    $args=['lmh_join'=>'1','ref'=>$m['id']];
+    if($artist_id && get_post_type($artist_id)==='lmh_artist') $args['artist']=absint($artist_id);
+    return add_query_arg($args,home_url('/'));
   }
 
   public static function qr_routes() {
@@ -83,8 +85,13 @@ final class LMH_Backend {
       echo '</div></main>';get_footer();exit;
     }
     if(isset($_GET['lmh_join'])){
-      $ref=preg_replace('/\D/','',(string)($_GET['ref']??''));if(strlen($ref)===9)setcookie('lmh_ref',$ref,time()+30*DAY_IN_SECONDS,COOKIEPATH?:'/',COOKIE_DOMAIN,is_ssl(),true);
-      wp_safe_redirect(lmh_url('join'));exit;
+      $ref=preg_replace('/\D/','',(string)($_GET['ref']??''));
+      $artist=absint($_GET['artist']??0);
+      if(strlen($ref)===9) setcookie('lmh_ref',$ref,time()+30*DAY_IN_SECONDS,COOKIEPATH?:'/',COOKIE_DOMAIN,is_ssl(),true);
+      if($artist && get_post_type($artist)==='lmh_artist' && get_post_status($artist)==='publish') setcookie('lmh_join_artist',(string)$artist,time()+30*DAY_IN_SECONDS,COOKIEPATH?:'/',COOKIE_DOMAIN,is_ssl(),true);
+      $join=lmh_url('join');
+      if($artist) $join=add_query_arg('artist',$artist,$join);
+      wp_safe_redirect($join);exit;
     }
   }
 
