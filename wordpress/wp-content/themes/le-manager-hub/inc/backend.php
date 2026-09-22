@@ -10,6 +10,8 @@ final class LMH_Backend {
 
   public static function init() {
     add_action('init',[__CLASS__,'roles'],20);
+    add_action('user_register',[__CLASS__,'assign_member_identity'],20);
+    add_action('wp_login',[__CLASS__,'ensure_member_identity_on_login'],20,2);
     add_action('add_meta_boxes',[__CLASS__,'profile_box']);
     add_action('save_post',[__CLASS__,'save_profile'],20,2);
     add_action('rest_api_init',[__CLASS__,'routes']);
@@ -18,6 +20,42 @@ final class LMH_Backend {
     add_action('admin_menu',[__CLASS__,'admin_menu']);
     add_action('admin_post_lmh_review_profile',[__CLASS__,'review_profile']);
     add_action('admin_post_lmh_booking_status',[__CLASS__,'admin_booking_status']);
+  }
+
+  private static function generate_lmid() {
+    global $wpdb;
+    for($i=0;$i<50;$i++){
+      $id=(string)random_int(100000000,999999999);
+      $exists=$wpdb->get_var($wpdb->prepare("SELECT user_id FROM {$wpdb->usermeta} WHERE meta_key='_lmh_member_id' AND meta_value=%s LIMIT 1",$id));
+      if(!$exists) return $id;
+    }
+    return '';
+  }
+
+  public static function assign_member_identity($user_id) {
+    if(get_user_meta($user_id,'_lmh_member_id',true)) return;
+    $id=self::generate_lmid();
+    if(!$id) return;
+    update_user_meta($user_id,'_lmh_member_id',$id);
+    update_user_meta($user_id,'_lmh_member_level','fan');
+    update_user_meta($user_id,'_lmh_member_status','active');
+    update_user_meta($user_id,'_lmh_member_since',current_time('Y-m-d'));
+    update_user_meta($user_id,'_lmh_card_status','digital');
+  }
+
+  public static function ensure_member_identity_on_login($login,$user) {
+    self::assign_member_identity($user->ID);
+  }
+
+  public static function member_identity($user_id) {
+    self::assign_member_identity($user_id);
+    return [
+      'id'=>(string)get_user_meta($user_id,'_lmh_member_id',true),
+      'level'=>sanitize_key(get_user_meta($user_id,'_lmh_member_level',true)?:'fan'),
+      'status'=>sanitize_key(get_user_meta($user_id,'_lmh_member_status',true)?:'active'),
+      'since'=>(string)get_user_meta($user_id,'_lmh_member_since',true),
+      'card_status'=>sanitize_key(get_user_meta($user_id,'_lmh_card_status',true)?:'digital'),
+    ];
   }
 
   public static function roles() {
