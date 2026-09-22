@@ -62,11 +62,64 @@ final class LMH_Backend {
       'callback'=>[__CLASS__,'booking_status'],
       'permission_callback'=>function(){ return current_user_can('manage_options'); }
     ]);
+    register_rest_route('lmh/v1','/profiles',[
+      'methods'=>'POST','callback'=>[__CLASS__,'create_profile'],
+      'permission_callback'=>function(){ return is_user_logged_in(); }
+    ]);
+    register_rest_route('lmh/v1','/profiles/(?P<id>\\d+)',[
+      'methods'=>'POST','callback'=>[__CLASS__,'update_profile'],
+      'permission_callback'=>function($r){ return self::can_manage_profile(absint($r['id'])); }
+    ]);
     register_rest_route('lmh/v1','/profiles/mine',[
       'methods'=>'GET',
       'callback'=>[__CLASS__,'my_profiles'],
       'permission_callback'=>function(){ return is_user_logged_in(); }
     ]);
+  }
+
+
+  public static function can_manage_profile($id) {
+    if(current_user_can('manage_options')) return true;
+    return $id && (int)get_post_meta($id,'_lmh_owner_user_id',true)===get_current_user_id();
+  }
+
+  private static function profile_type($kind) {
+    return ['artist'=>'lmh_artist','professional'=>'lmh_professional','company'=>'lmh_company'][sanitize_key($kind)] ?? '';
+  }
+
+  private static function profile_payload(WP_REST_Request $r) {
+    return [
+      'name'=>sanitize_text_field($r->get_param('name')),
+      'bio'=>wp_kses_post((string)$r->get_param('bio')),
+      'city'=>sanitize_text_field($r->get_param('city')),
+      'website'=>esc_url_raw($r->get_param('website')),
+      'services'=>sanitize_textarea_field($r->get_param('services')),
+      'booking_email'=>sanitize_email($r->get_param('booking_email')),
+    ];
+  }
+
+  public static function create_profile(WP_REST_Request $r) {
+    $type=self::profile_type($r->get_param('type'));
+    $data=self::profile_payload($r);
+    if(!$type) return new WP_Error('invalid_type','Choose Artist, Professional or Company.',['status'=>400]);
+    if($data['name']==='') return new WP_Error('missing_name','Profile name is required.',['status'=>400]);
+    $id=wp_insert_post(['post_type'=>$type,'post_status'=>'pending','post_title'=>$data['name'],'post_content'=>$data['bio'],'post_author'=>get_current_user_id()],true);
+    if(is_wp_error($id)) return $id;
+    update_post_meta($id,'_lmh_owner_user_id',get_current_user_id());
+    update_post_meta($id,'_lmh_verified_level','pending');
+    foreach(['city','website','services','booking_email'] as $key) if($data[$key]!=='') update_post_meta($id,'_lmh_'.$key,$data[$key]);
+    return new WP_REST_Response(['success'=>true,'id'=>$id,'status'=>'pending','verification'=>'pending'],201);
+  }
+
+  public static function update_profile(WP_REST_Request $r) {
+    $id=absint($r['id']);
+    if(!in_array(get_post_type($id),['lmh_artist','lmh_professional','lmh_company'],true)) return new WP_Error('not_profile','Profile not found.',['status'=>404]);
+    $data=self::profile_payload($r);
+    $post=[]; if($data['name']!=='')$post['post_title']=$data['name']; if($r->has_param('bio'))$post['post_content']=$data['bio'];
+    if($post){$post['ID']=$id;$saved=wp_update_post($post,true);if(is_wp_error($saved))return $saved;}
+    foreach(['city','website','services','booking_email'] as $key) if($r->has_param($key)) update_post_meta($id,'_lmh_'.$key,$data[$key]);
+    if(!current_user_can('manage_options') && get_post_status($id)==='publish') update_post_meta($id,'_lmh_profile_updated_at',current_time('mysql'));
+    return ['success'=>true,'id'=>$id,'status'=>get_post_status($id),'verification'=>get_post_meta($id,'_lmh_verified_level',true)?:'unverified'];
   }
 
   public static function booking_status(WP_REST_Request $r) {
