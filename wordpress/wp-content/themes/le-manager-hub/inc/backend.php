@@ -21,6 +21,7 @@ final class LMH_Backend {
     add_action('admin_post_lmh_review_profile',[__CLASS__,'review_profile']);
     add_action('admin_post_lmh_booking_status',[__CLASS__,'admin_booking_status']);
     add_action('admin_post_lmh_create_qr_campaign',[__CLASS__,'admin_create_qr_campaign']);
+    add_action('admin_post_lmh_qr_image',[__CLASS__,'admin_qr_image']);
     add_action('template_redirect',[__CLASS__,'qr_routes']);
     add_action('init',[__CLASS__,'register_qr_campaign']);
   }
@@ -66,6 +67,29 @@ final class LMH_Backend {
       update_post_meta($id,'_lmh_qr_status','active');
     }
     wp_safe_redirect(admin_url('admin.php?page=lmh-control#smart-qr'));exit;
+  }
+
+  public static function qr_image_url($campaign_id) {
+    return wp_nonce_url(admin_url('admin-post.php?action=lmh_qr_image&campaign_id='.absint($campaign_id)),'lmh_qr_image_'.absint($campaign_id));
+  }
+
+  public static function admin_qr_image() {
+    if(!current_user_can('manage_options')) wp_die('Not allowed.');
+    $id=absint($_GET['campaign_id']??0);
+    check_admin_referer('lmh_qr_image_'.$id);
+    if(get_post_type($id)!=='lmh_qr_campaign') wp_die('Campaign not found.');
+    $url=self::campaign_url($id);
+    if(!$url) wp_die('Campaign URL missing.');
+    // Google Chart is intentionally not used. Render a print-ready SVG wrapper
+    // with the campaign URL and code; a local QR encoder can replace this block.
+    $code=(string)get_post_meta($id,'_lmh_qr_code',true);
+    $title=get_the_title($id);
+    nocache_headers();
+    header('Content-Type: image/svg+xml; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="le-manager-qr-'.sanitize_file_name($code).'.svg"');
+    $safe_url=esc_html($url);$safe_title=esc_html($title);$safe_code=esc_html($code);
+    echo '<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1100" viewBox="0 0 900 1100"><rect width="900" height="1100" fill="white"/><rect x="30" y="30" width="840" height="1040" rx="28" fill="none" stroke="black" stroke-width="6"/><text x="450" y="110" text-anchor="middle" font-family="Arial" font-size="42" font-weight="700">LE MANAGER</text><text x="450" y="160" text-anchor="middle" font-family="Arial" font-size="24">WORLD MUSIC INDUSTRY</text><text x="450" y="245" text-anchor="middle" font-family="Arial" font-size="30" font-weight="700">'.$safe_title.'</text><rect x="160" y="310" width="580" height="580" fill="#f5f5f5" stroke="black" stroke-width="3"/><text x="450" y="575" text-anchor="middle" font-family="Arial" font-size="28" font-weight="700">SMART QR</text><text x="450" y="620" text-anchor="middle" font-family="Arial" font-size="20">QR encoder integration point</text><text x="450" y="665" text-anchor="middle" font-family="Arial" font-size="18">Campaign '.$safe_code.'</text><text x="450" y="955" text-anchor="middle" font-family="Arial" font-size="18">'.$safe_url.'</text><text x="450" y="1015" text-anchor="middle" font-family="Arial" font-size="18" font-weight="700">SCAN • JOIN • CONNECT</text></svg>';
+    exit;
   }
 
   private static function campaign_by_code($code) {
@@ -327,7 +351,11 @@ final class LMH_Backend {
     echo '<div class="wrap"><h1>Le Manager Control Center</h1><p>Manage the professional network, verification and booking workflow.</p>';
     $campaigns=new WP_Query(['post_type'=>'lmh_qr_campaign','post_status'=>'publish','posts_per_page'=>25,'orderby'=>'date','order'=>'DESC']);
     echo '<div id="smart-qr" style="margin:28px 0"><h2>Smart QR Campaigns</h2><form method="post" action="'.esc_url(admin_url('admin-post.php')).'" style="background:#fff;border:1px solid #dcdcde;padding:16px;margin-bottom:16px"><input type="hidden" name="action" value="lmh_create_qr_campaign">'.wp_nonce_field('lmh_create_qr_campaign','_wpnonce',true,false).'<p><input name="label" class="regular-text" placeholder="Campaign name" required> <input name="artist_id" type="number" min="0" placeholder="Artist post ID"> <input name="referrer_user_id" type="number" min="0" placeholder="Ambassador user ID"> <button class="button button-primary">Create Smart QR Campaign</button></p></form>';
-    if($campaigns->have_posts()){echo '<table class="widefat striped"><thead><tr><th>Campaign</th><th>Code</th><th>Artist</th><th>Scans</th><th>Joins</th><th>Conversion</th><th>URL</th></tr></thead><tbody>';foreach($campaigns->posts as $q){$sc=(int)get_post_meta($q->ID,'_lmh_qr_scans',true);$jo=(int)get_post_meta($q->ID,'_lmh_qr_joins',true);$aid=(int)get_post_meta($q->ID,'_lmh_qr_artist_id',true);$rate=$sc?round(($jo/$sc)*100,1):0;echo '<tr><td>'.esc_html(get_the_title($q)).'</td><td><code>'.esc_html(get_post_meta($q->ID,'_lmh_qr_code',true)).'</code></td><td>'.esc_html($aid?get_the_title($aid):'General').'</td><td>'.esc_html($sc).'</td><td>'.esc_html($jo).'</td><td>'.esc_html($rate).'%</td><td><input class="large-text" readonly value="'.esc_attr(self::campaign_url($q->ID)).'"></td></tr>';}echo '</tbody></table>';}else echo '<p>No Smart QR campaigns yet.</p>';echo '</div>';
+    if($campaigns->have_posts()){echo '<table class="widefat striped"><thead><tr><th>Campaign</th><th>Code</th><th>Artist</th><th>Scans</th><th>Joins</th><th>Conversion</th><th>URL / Print</th></tr></thead><tbody>';foreach($campaigns->posts as $q){$sc=(int)get_post_meta($q->ID,'_lmh_qr_scans',true);$jo=(int)get_post_meta($q->ID,'_lmh_qr_joins',true);$aid=(int)get_post_meta($q->ID,'_lmh_qr_artist_id',true);$rate=$sc?round(($jo/$sc)*100,1):0;echo '<tr><td>'.esc_html(get_the_title($q)).'</td><td><code>'.esc_html(get_post_meta($q->ID,'_lmh_qr_code',true)).'</code></td><td>'.esc_html($aid?get_the_title($aid):'General').'</td><td>'.esc_html($sc).'</td><td>'.esc_html($jo).'</td><td>'.esc_html($rate).'%</td><td><input class="large-text" readonly value="'.esc_attr(self::campaign_url($q->ID)).'"><br><a class="button" style="margin-top:6px" href="'.esc_url(self::qr_image_url($q->ID)).'">PRINT CARD SVG</a></td></tr>';}echo '</tbody></table>';}else echo '<p>No Smart QR campaigns yet.</p>';echo '</div>';
+
+    $crm_users=get_users(['number'=>50,'orderby'=>'registered','order'=>'DESC','meta_key'=>'_lmh_join_campaign_id']);
+    echo '<div id="fan-crm" style="margin:28px 0"><h2>Fan CRM — Recent QR Members</h2><p>Members attributed to Smart QR campaigns. Contact information is visible only to administrators.</p>';
+    if($crm_users){echo '<table class="widefat striped"><thead><tr><th>Member</th><th>LMID</th><th>Email</th><th>Campaign</th><th>Artist</th><th>Referrer</th><th>Joined</th></tr></thead><tbody>';foreach($crm_users as $cu){$cid=(int)get_user_meta($cu->ID,'_lmh_join_campaign_id',true);$aid=(int)get_user_meta($cu->ID,'_lmh_join_artist_id',true);$rid=(int)get_user_meta($cu->ID,'_lmh_referrer_user_id',true);$ru=$rid?get_user_by('id',$rid):false;$lmid=(string)get_user_meta($cu->ID,'_lmh_member_id',true);echo '<tr><td><strong>'.esc_html($cu->display_name).'</strong></td><td>'.esc_html($lmid).'</td><td>'.esc_html($cu->user_email).'</td><td>'.esc_html($cid?get_the_title($cid):'—').'</td><td>'.esc_html($aid?get_the_title($aid):'—').'</td><td>'.esc_html($ru?$ru->display_name:'—').'</td><td>'.esc_html(mysql2date('M j, Y',$cu->user_registered)).'</td></tr>';}echo '</tbody></table>';}else echo '<p>No QR-attributed members yet.</p>';echo '</div>';
     echo '<div style="display:flex;gap:12px;flex-wrap:wrap;margin:20px 0">';
     foreach($counts as $label=>$count) echo '<div style="background:#fff;border:1px solid #dcdcde;padding:16px 22px;min-width:130px"><strong style="font-size:24px">'.esc_html($count).'</strong><br>'.esc_html(ucwords($label)).'</div>';
     echo '</div><h2>Profiles Awaiting Review</h2>';
