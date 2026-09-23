@@ -7,6 +7,10 @@ if (!defined('ABSPATH')) exit;
  */
 final class LMH_Backend {
   const BOOKING_STATUSES = ['new','reviewing','accepted','declined','confirmed','completed','cancelled'];
+  const MEMBER_LEVELS = [
+    1=>'fan',2=>'connector',3=>'insider',4=>'supporter',
+    5=>'ambassador',6=>'elite_ambassador',7=>'vip'
+  ];
 
   public static function init() {
     add_action('init',[__CLASS__,'roles'],20);
@@ -22,6 +26,7 @@ final class LMH_Backend {
     add_action('admin_post_lmh_booking_status',[__CLASS__,'admin_booking_status']);
     add_action('admin_post_lmh_create_qr_campaign',[__CLASS__,'admin_create_qr_campaign']);
     add_action('admin_post_lmh_qr_image',[__CLASS__,'admin_qr_image']);
+    add_action('admin_post_lmh_member_level',[__CLASS__,'admin_member_level']);
     add_action('template_redirect',[__CLASS__,'qr_routes']);
     add_action('init',[__CLASS__,'register_qr_campaign']);
   }
@@ -124,6 +129,35 @@ final class LMH_Backend {
     update_user_meta($user_id,'_lmh_card_status','digital');
   }
 
+  public static function member_level_number($user_id) {
+    $level=sanitize_key(get_user_meta($user_id,'_lmh_member_level',true)?:'fan');
+    $n=array_search($level,self::MEMBER_LEVELS,true);
+    return $n?(int)$n:1;
+  }
+
+  public static function set_member_level($user_id,$level,$source='admin') {
+    $level=is_numeric($level)?(int)$level:sanitize_key($level);
+    if(is_int($level)) $slug=self::MEMBER_LEVELS[$level]??'';
+    else {$slug=$level;$level=array_search($slug,self::MEMBER_LEVELS,true);}
+    if(!$slug || !$level) return false;
+    $old=sanitize_key(get_user_meta($user_id,'_lmh_member_level',true)?:'fan');
+    if($old===$slug) return true;
+    update_user_meta($user_id,'_lmh_member_level',$slug);
+    update_user_meta($user_id,'_lmh_member_level_number',(int)$level);
+    update_user_meta($user_id,'_lmh_member_level_updated_at',current_time('mysql'));
+    $history=get_user_meta($user_id,'_lmh_member_level_history',true);
+    if(!is_array($history)) $history=[];
+    $history[]=['from'=>$old,'to'=>$slug,'at'=>current_time('mysql'),'source'=>sanitize_key($source)];
+    if(count($history)>50) $history=array_slice($history,-50);
+    update_user_meta($user_id,'_lmh_member_level_history',$history);
+    return true;
+  }
+
+  public static function referral_stats($user_id) {
+    $direct=get_users(['fields'=>'ids','meta_key'=>'_lmh_referrer_user_id','meta_value'=>absint($user_id),'number'=>-1]);
+    return ['direct_count'=>count($direct),'direct_user_ids'=>array_map('intval',$direct)];
+  }
+
   public static function ensure_member_identity_on_login($login,$user) {
     self::assign_member_identity($user->ID);
   }
@@ -133,6 +167,7 @@ final class LMH_Backend {
     return [
       'id'=>(string)get_user_meta($user_id,'_lmh_member_id',true),
       'level'=>sanitize_key(get_user_meta($user_id,'_lmh_member_level',true)?:'fan'),
+      'level_number'=>self::member_level_number($user_id),
       'status'=>sanitize_key(get_user_meta($user_id,'_lmh_member_status',true)?:'active'),
       'since'=>(string)get_user_meta($user_id,'_lmh_member_since',true),
       'card_status'=>sanitize_key(get_user_meta($user_id,'_lmh_card_status',true)?:'digital'),
@@ -356,6 +391,9 @@ final class LMH_Backend {
     $crm_users=get_users(['number'=>50,'orderby'=>'registered','order'=>'DESC','meta_key'=>'_lmh_join_campaign_id']);
     echo '<div id="fan-crm" style="margin:28px 0"><h2>Fan CRM — Recent QR Members</h2><p>Members attributed to Smart QR campaigns. Contact information is visible only to administrators.</p>';
     if($crm_users){echo '<table class="widefat striped"><thead><tr><th>Member</th><th>LMID</th><th>Email</th><th>Campaign</th><th>Artist</th><th>Referrer</th><th>Joined</th></tr></thead><tbody>';foreach($crm_users as $cu){$cid=(int)get_user_meta($cu->ID,'_lmh_join_campaign_id',true);$aid=(int)get_user_meta($cu->ID,'_lmh_join_artist_id',true);$rid=(int)get_user_meta($cu->ID,'_lmh_referrer_user_id',true);$ru=$rid?get_user_by('id',$rid):false;$lmid=(string)get_user_meta($cu->ID,'_lmh_member_id',true);echo '<tr><td><strong>'.esc_html($cu->display_name).'</strong></td><td>'.esc_html($lmid).'</td><td>'.esc_html($cu->user_email).'</td><td>'.esc_html($cid?get_the_title($cid):'—').'</td><td>'.esc_html($aid?get_the_title($aid):'—').'</td><td>'.esc_html($ru?$ru->display_name:'—').'</td><td>'.esc_html(mysql2date('M j, Y',$cu->user_registered)).'</td></tr>';}echo '</tbody></table>';}else echo '<p>No QR-attributed members yet.</p>';echo '</div>';
+    $members=get_users(['number'=>100,'orderby'=>'registered','order'=>'DESC','meta_key'=>'_lmh_member_id']);
+    echo '<div id="membership-levels" style="margin:28px 0"><h2>7-Level Membership Engine</h2><p>Fan → Connector → Insider → Supporter → Ambassador → Elite Ambassador → VIP. LMID stays permanent when a member advances.</p>';
+    if($members){echo '<table class="widefat striped"><thead><tr><th>Member</th><th>LMID</th><th>Current Level</th><th>Direct Referrals</th><th>Referrer</th><th>Manage Level</th></tr></thead><tbody>';foreach($members as $mu){$mi=self::member_identity($mu->ID);$rs=self::referral_stats($mu->ID);$rid=(int)get_user_meta($mu->ID,'_lmh_referrer_user_id',true);$ru=$rid?get_user_by('id',$rid):false;echo '<tr><td><strong>'.esc_html($mu->display_name).'</strong></td><td>'.esc_html($mi['id']).'</td><td>Level '.esc_html($mi['level_number']).' — '.esc_html(ucwords(str_replace('_',' ',$mi['level']))).'</td><td>'.esc_html($rs['direct_count']).'</td><td>'.esc_html($ru?$ru->display_name:'—').'</td><td><form method="post" action="'.esc_url(admin_url('admin-post.php')).'"><input type="hidden" name="action" value="lmh_member_level"><input type="hidden" name="user_id" value="'.esc_attr($mu->ID).'">'.wp_nonce_field('lmh_member_level_'.$mu->ID,'_wpnonce',true,false).'<select name="level">';foreach(self::MEMBER_LEVELS as $ln=>$ls)echo '<option value="'.esc_attr($ln).'" '.selected($mi['level_number'],$ln,false).'>'.esc_html($ln.' — '.ucwords(str_replace('_',' ',$ls))).'</option>';echo '</select> <button class="button">Update</button></form></td></tr>';}echo '</tbody></table>';}else echo '<p>No LMID members yet.</p>';echo '</div>';
     echo '<div style="display:flex;gap:12px;flex-wrap:wrap;margin:20px 0">';
     foreach($counts as $label=>$count) echo '<div style="background:#fff;border:1px solid #dcdcde;padding:16px 22px;min-width:130px"><strong style="font-size:24px">'.esc_html($count).'</strong><br>'.esc_html(ucwords($label)).'</div>';
     echo '</div><h2>Profiles Awaiting Review</h2>';
@@ -377,6 +415,15 @@ final class LMH_Backend {
       } echo '</tbody></table>';
     }
     echo '</div>';
+  }
+
+  public static function admin_member_level() {
+    if(!current_user_can('manage_options')) wp_die('Not allowed.');
+    $uid=absint($_POST['user_id']??0);
+    check_admin_referer('lmh_member_level_'.$uid);
+    $level=absint($_POST['level']??1);
+    if($uid && get_user_by('id',$uid) && isset(self::MEMBER_LEVELS[$level])) self::set_member_level($uid,$level,'admin');
+    wp_safe_redirect(admin_url('admin.php?page=lmh-control#membership-levels'));exit;
   }
 
   public static function review_profile() {
