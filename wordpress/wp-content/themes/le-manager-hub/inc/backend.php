@@ -222,6 +222,9 @@ final class LMH_Backend {
     return [
       'enabled'=>$level>=5,
       'recruitment_url'=>self::recruitment_url($user_id),
+      'smart_qr_url'=>self::member_smart_qr_url($user_id),
+      'qr_image_url'=>self::member_qr_image_url($user_id),
+      'qr_scans'=>max(0,(int)get_user_meta($user_id,'_lmh_member_qr_scans',true)),
       'card'=>self::card_eligibility($user_id),
       'network'=>self::network_stats($user_id,7),
       'referrals'=>self::referral_stats($user_id)
@@ -250,18 +253,62 @@ final class LMH_Backend {
     return $token;
   }
 
+  private static function member_referral_code($user_id) {
+    $code=(string)get_user_meta($user_id,'_lmh_referral_code',true);
+    if(!$code){
+      for($i=0;$i<30;$i++){
+        $candidate=strtolower(wp_generate_password(16,false,false));
+        $users=get_users(['fields'=>'ids','number'=>1,'meta_key'=>'_lmh_referral_code','meta_value'=>$candidate]);
+        if(!$users){$code=$candidate;break;}
+      }
+      if(!$code)$code=strtolower(wp_generate_password(24,false,false));
+      update_user_meta($user_id,'_lmh_referral_code',$code);
+    }
+    return $code;
+  }
+
+  private static function member_by_referral_code($code) {
+    $users=get_users(['number'=>1,'meta_key'=>'_lmh_referral_code','meta_value'=>sanitize_text_field($code)]);
+    return $users?$users[0]:null;
+  }
+
+  public static function member_smart_qr_url($user_id) {
+    return add_query_arg('lmh_member_qr',self::member_referral_code($user_id),home_url('/'));
+  }
+
+  public static function member_qr_image_url($user_id,$size=320) {
+    $size=max(160,min(800,absint($size)));
+    return 'https://api.qrserver.com/v1/create-qr-code/?size='.$size.'x'.$size.'&format=png&margin=12&data='.rawurlencode(self::member_smart_qr_url($user_id));
+  }
+
   public static function verification_url($user_id) {
     return add_query_arg(['lmh_verify'=>$user_id,'token'=>self::qr_token($user_id)],home_url('/'));
   }
 
   public static function recruitment_url($user_id,$artist_id=0) {
-    $m=self::member_identity($user_id);
-    $args=['lmh_join'=>'1','ref'=>$m['id']];
+    $args=['lmh_member_qr'=>self::member_referral_code($user_id)];
     if($artist_id && get_post_type($artist_id)==='lmh_artist') $args['artist']=absint($artist_id);
     return add_query_arg($args,home_url('/'));
   }
 
   public static function qr_routes() {
+    if(isset($_GET['lmh_member_qr'])){
+      $code=sanitize_text_field(wp_unslash($_GET['lmh_member_qr']));
+      $referrer=self::member_by_referral_code($code);
+      if(!$referrer){status_header(404);return;}
+      $cookie='lmh_member_qr_seen_'.$referrer->ID;
+      if(empty($_COOKIE[$cookie])){
+        update_user_meta($referrer->ID,'_lmh_member_qr_scans',(int)get_user_meta($referrer->ID,'_lmh_member_qr_scans',true)+1);
+        setcookie($cookie,'1',time()+DAY_IN_SECONDS,COOKIEPATH?:'/',COOKIE_DOMAIN,is_ssl(),true);
+      }
+      $m=self::member_identity($referrer->ID);
+      if(!empty($m['id']))setcookie('lmh_ref',$m['id'],time()+30*DAY_IN_SECONDS,COOKIEPATH?:'/',COOKIE_DOMAIN,is_ssl(),true);
+      setcookie('lmh_referral_code',$code,time()+30*DAY_IN_SECONDS,COOKIEPATH?:'/',COOKIE_DOMAIN,is_ssl(),true);
+      $artist=absint($_GET['artist']??0);
+      if($artist && get_post_type($artist)==='lmh_artist' && get_post_status($artist)==='publish')setcookie('lmh_join_artist',(string)$artist,time()+30*DAY_IN_SECONDS,COOKIEPATH?:'/',COOKIE_DOMAIN,is_ssl(),true);
+      $join=lmh_url('join');if($artist)$join=add_query_arg('artist',$artist,$join);
+      wp_safe_redirect($join);exit;
+    }
     if(isset($_GET['lmh_campaign'])){
       $campaign=self::campaign_by_code(sanitize_text_field(wp_unslash($_GET['lmh_campaign'])));
       if(!$campaign || get_post_meta($campaign->ID,'_lmh_qr_status',true)==='inactive'){status_header(404);return;}
