@@ -225,6 +225,8 @@ final class LMH_Backend {
       'smart_qr_url'=>self::member_smart_qr_url($user_id),
       'qr_image_url'=>self::member_qr_image_url($user_id),
       'qr_scans'=>max(0,(int)get_user_meta($user_id,'_lmh_member_qr_scans',true)),
+      'qr_joins'=>max(0,(int)get_user_meta($user_id,'_lmh_member_qr_joins',true)),
+      'qr_conversion_rate'=>($scans=max(0,(int)get_user_meta($user_id,'_lmh_member_qr_scans',true)))?round((max(0,(int)get_user_meta($user_id,'_lmh_member_qr_joins',true))/$scans)*100,1):0,
       'card'=>self::card_eligibility($user_id),
       'network'=>self::network_stats($user_id,7),
       'referrals'=>self::referral_stats($user_id)
