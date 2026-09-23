@@ -158,6 +158,34 @@ final class LMH_Backend {
     return ['direct_count'=>count($direct),'direct_user_ids'=>array_map('intval',$direct)];
   }
 
+  public static function referral_tree($user_id,$max_depth=7,$depth=1,$seen=[]) {
+    $user_id=absint($user_id);$max_depth=max(1,min(7,absint($max_depth)));
+    if(!$user_id || $depth>$max_depth || in_array($user_id,$seen,true)) return [];
+    $seen[]=$user_id;
+    $children=get_users(['fields'=>'ids','meta_key'=>'_lmh_referrer_user_id','meta_value'=>$user_id,'number'=>-1,'orderby'=>'registered','order'=>'ASC']);
+    $nodes=[];
+    foreach($children as $cid){
+      $u=get_user_by('id',$cid);if(!$u)continue;
+      $m=self::member_identity($cid);
+      $nodes[]=['user_id'=>$cid,'name'=>$u->display_name,'lmid'=>$m['id'],'level'=>$m['level'],'level_number'=>$m['level_number'],'joined'=>$u->user_registered,'children'=>self::referral_tree($cid,$max_depth,$depth+1,$seen)];
+    }
+    return $nodes;
+  }
+
+  public static function network_stats($user_id,$max_depth=7) {
+    $tree=self::referral_tree($user_id,$max_depth);$total=0;$by_depth=[];
+    $walk=function($nodes,$depth) use (&$walk,&$total,&$by_depth){foreach($nodes as $n){$total++;$by_depth[$depth]=($by_depth[$depth]??0)+1;if(!empty($n['children']))$walk($n['children'],$depth+1);}};
+    $walk($tree,1);
+    return ['total_network'=>$total,'by_depth'=>$by_depth,'tree'=>$tree];
+  }
+
+  private static function render_network_nodes($nodes,$depth=1) {
+    if(!$nodes) return '<em>No referrals yet.</em>';
+    $html='<ul style="margin:8px 0 8px 22px">';
+    foreach($nodes as $n){$html.='<li style="margin:8px 0"><strong>'.esc_html($n['name']).'</strong> <code>'.esc_html($n['lmid']).'</code> <span>Level '.esc_html($n['level_number']).' — '.esc_html(ucwords(str_replace('_',' ',$n['level']))).'</span>';if(!empty($n['children']))$html.=self::render_network_nodes($n['children'],$depth+1);$html.='</li>';}
+    return $html.'</ul>';
+  }
+
   public static function ensure_member_identity_on_login($login,$user) {
     self::assign_member_identity($user->ID);
   }
@@ -394,6 +422,10 @@ final class LMH_Backend {
     $members=get_users(['number'=>100,'orderby'=>'registered','order'=>'DESC','meta_key'=>'_lmh_member_id']);
     echo '<div id="membership-levels" style="margin:28px 0"><h2>7-Level Membership Engine</h2><p>Fan → Connector → Insider → Supporter → Ambassador → Elite Ambassador → VIP. LMID stays permanent when a member advances.</p>';
     if($members){echo '<table class="widefat striped"><thead><tr><th>Member</th><th>LMID</th><th>Current Level</th><th>Direct Referrals</th><th>Referrer</th><th>Manage Level</th></tr></thead><tbody>';foreach($members as $mu){$mi=self::member_identity($mu->ID);$rs=self::referral_stats($mu->ID);$rid=(int)get_user_meta($mu->ID,'_lmh_referrer_user_id',true);$ru=$rid?get_user_by('id',$rid):false;echo '<tr><td><strong>'.esc_html($mu->display_name).'</strong></td><td>'.esc_html($mi['id']).'</td><td>Level '.esc_html($mi['level_number']).' — '.esc_html(ucwords(str_replace('_',' ',$mi['level']))).'</td><td>'.esc_html($rs['direct_count']).'</td><td>'.esc_html($ru?$ru->display_name:'—').'</td><td><form method="post" action="'.esc_url(admin_url('admin-post.php')).'"><input type="hidden" name="action" value="lmh_member_level"><input type="hidden" name="user_id" value="'.esc_attr($mu->ID).'">'.wp_nonce_field('lmh_member_level_'.$mu->ID,'_wpnonce',true,false).'<select name="level">';foreach(self::MEMBER_LEVELS as $ln=>$ls)echo '<option value="'.esc_attr($ln).'" '.selected($mi['level_number'],$ln,false).'>'.esc_html($ln.' — '.ucwords(str_replace('_',' ',$ls))).'</option>';echo '</select> <button class="button">Update</button></form></td></tr>';}echo '</tbody></table>';}else echo '<p>No LMID members yet.</p>';echo '</div>';
+    $roots=get_users(['number'=>50,'orderby'=>'registered','order'=>'ASC','meta_key'=>'_lmh_member_id']);
+    $root_ids=[];foreach($roots as $rmu){$rid=(int)get_user_meta($rmu->ID,'_lmh_referrer_user_id',true);if(!$rid)$root_ids[]=$rmu->ID;}
+    echo '<div id="each-one-bring-one" style="margin:28px 0"><h2>Each One Bring One — Network Tree</h2><p>Shows verified referral relationships through seven generations. This is attribution and community-growth tracking; membership advancement remains separately managed.</p>';
+    if($root_ids){foreach($root_ids as $root_id){$root=get_user_by('id',$root_id);if(!$root)continue;$mi=self::member_identity($root_id);$ns=self::network_stats($root_id,7);echo '<details style="background:#fff;border:1px solid #dcdcde;padding:14px;margin:10px 0"><summary style="cursor:pointer"><strong>'.esc_html($root->display_name).'</strong> — LMID '.esc_html($mi['id']).' — Level '.esc_html($mi['level_number']).' — Network '.esc_html($ns['total_network']).'</summary>'.self::render_network_nodes($ns['tree']).'</details>';}}else echo '<p>No referral network relationships yet.</p>';echo '</div>';
     echo '<div style="display:flex;gap:12px;flex-wrap:wrap;margin:20px 0">';
     foreach($counts as $label=>$count) echo '<div style="background:#fff;border:1px solid #dcdcde;padding:16px 22px;min-width:130px"><strong style="font-size:24px">'.esc_html($count).'</strong><br>'.esc_html(ucwords($label)).'</div>';
     echo '</div><h2>Profiles Awaiting Review</h2>';
