@@ -405,15 +405,16 @@ final class LMH_Backend {
     }
     if(isset($_GET['lmh_verify'])){
       $uid=absint($_GET['lmh_verify']);$token=sanitize_text_field(wp_unslash($_GET['token']??''));$stored=(string)get_user_meta($uid,'_lmh_qr_token',true);
-      status_header(200);nocache_headers();get_header();
-      echo '<main class="lmh-verify-page"><div class="lmh-verify-shell"><div class="lmh-verify-brand"><span>LE MANAGER</span><small>WORLD MUSIC INDUSTRY</small></div>';
+      status_header(200);nocache_headers();
+      echo '<!doctype html><html '.get_language_attributes().'><head><meta charset="'.esc_attr(get_bloginfo('charset')).'"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Le Manager — Secure Membership Verification</title>';
+      wp_head();echo '</head><body class="lmh-verify-standalone"><main class="lmh-verify-page"><div class="lmh-verify-shell"><div class="lmh-verify-brand"><span>LE MANAGER</span><small>WORLD MUSIC INDUSTRY</small></div>';
       if($uid&&$stored&&hash_equals($stored,$token)){
         $u=get_user_by('id',$uid);$m=self::member_identity($uid);$mb=self::member_benefits($uid);$active=$m['status']==='active';$level=strtoupper(str_replace('_',' ',$m['level']));$lmid=substr($m['id'],0,3).' '.substr($m['id'],3,3).' '.substr($m['id'],6,3);
         echo '<section class="lmh-verify-pass '.($active?'is-active':'is-inactive').'"><div class="lmh-verify-icon" aria-hidden="true">'.($active?'✓':'!').'</div><div class="lmh-verify-eyebrow">SECURE MEMBER VERIFICATION</div><h1>'.($active?'Membership Verified':'Membership Not Active').'</h1><p class="lmh-verify-lead">'.($active?'This is a valid Le Manager membership credential.':'The credential is valid, but this membership is not currently active.').'</p><div class="lmh-verify-member"><div><span>MEMBER</span><strong>'.esc_html($u?$u->display_name:'Le Manager Member').'</strong></div><div><span>LMID</span><strong>'.esc_html($lmid).'</strong></div><div><span>MEMBERSHIP LEVEL</span><strong>Level '.esc_html($m['level_number']).' · '.esc_html($level).'</strong></div></div><div class="lmh-verify-benefit"><span>PARTNER BENEFIT ELIGIBILITY</span>'.($active&&$mb['current']['discount']?'<strong>'.esc_html($mb['current']['discount']).'</strong><p>Apply the configured Le Manager member benefit according to your partner terms.</p>':'<strong>No discount configured</strong><p>No level-specific partner discount is currently available for this membership.</p>').'</div><div class="lmh-verify-security"><span>✓ Secure QR credential</span><span>✓ Membership identity confirmed</span><span>LMID is not a payment card or password</span></div></section>';
       }else{
         echo '<section class="lmh-verify-pass is-invalid"><div class="lmh-verify-icon" aria-hidden="true">×</div><div class="lmh-verify-eyebrow">SECURE MEMBER VERIFICATION</div><h1>Unable to Verify</h1><p class="lmh-verify-lead">This credential is invalid or can no longer be verified. Do not apply a Le Manager member benefit from this screen.</p><div class="lmh-verify-security"><span>Credential not verified</span><span>Scan the member’s current Le Manager QR again</span></div></section>';
       }
-      echo '<p class="lmh-verify-foot">Official Le Manager membership verification · Secure member identity</p></div></main>';get_footer();exit;
+      echo '<p class="lmh-verify-foot">Official Le Manager membership verification · Secure member identity</p><p class="lmh-verify-return"><a href="'.esc_url(home_url('/')).'">LE MANAGER HOME</a></p></div></main>';wp_footer();echo '</body></html>';exit;
     }
     if(isset($_GET['lmh_join'])){
       $ref=preg_replace('/\D/','',(string)($_GET['ref']??''));
