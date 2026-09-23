@@ -394,3 +394,7 @@ a[href],button{cursor:pointer}
 .lmh-partner-use{appearance:none;border:1px solid rgba(255,255,255,.18);background:transparent;color:#fff;border-radius:999px;min-height:42px;padding:0 15px;font-size:9px;font-weight:900;letter-spacing:.7px;cursor:pointer}
 .lmh-partner-use:hover{background:#fff;color:#111}
 .lmh-partner-notice{margin:18px 0;padding:13px 16px;border:1px solid rgba(255,255,255,.12);border-left:3px solid #168447;border-radius:10px;background:rgba(255,255,255,.05);font-size:13px}
+
+.lmh-local-qr{display:inline-flex;align-items:center;justify-content:center;margin:12px 0 16px;padding:12px;background:#fff;border-radius:16px;box-shadow:0 12px 35px rgba(0,0,0,.28)}
+.lmh-local-qr img,.lmh-local-qr canvas{display:block!important;width:240px!important;height:240px!important;max-width:100%;border-radius:5px}
+@media(max-width:420px){.lmh-local-qr img,.lmh-local-qr canvas{width:210px!important;height:210px!important}}
