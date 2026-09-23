@@ -372,3 +372,21 @@ a[href],button{cursor:pointer}
 #member-card,#each-one-bring-one,#membership-tree,#growth-dashboard,#member-benefits,#smart-qr-center,#squad,#professional-center,#my-bookings{scroll-margin-top:92px}
 @media(max-width:1100px){.lmh-account-subnav-track{justify-content:flex-start}}
 @media(max-width:720px){.lmh-account-subnav{top:4px;margin:14px -17px 24px;padding:7px 17px;border-radius:0;border-left:0;border-right:0}.lmh-account-subnav-track{gap:5px}.lmh-account-subnav a{min-height:38px;padding:0 13px;font-size:9px}}
+
+
+/* LUXURY MEMBER PARTNER MARKETPLACE */
+#partner-marketplace{background:linear-gradient(145deg,#0a0a0a,#151515);color:#fff;border-color:#252525}
+#partner-marketplace>p{color:#aaa}
+.lmh-partner-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:24px}
+.lmh-partner-card{position:relative;overflow:hidden;min-height:285px;padding:27px;border:1px solid rgba(255,255,255,.1);border-radius:18px;background:radial-gradient(circle at 95% 0,rgba(216,10,22,.17),transparent 35%),rgba(255,255,255,.035);box-shadow:0 16px 45px rgba(0,0,0,.15)}
+.lmh-partner-top{display:flex;justify-content:space-between;gap:12px;align-items:center;font-size:9px;font-weight:900;letter-spacing:.9px;text-transform:uppercase;color:#999}
+.lmh-partner-top strong{padding:7px 9px;border:1px solid rgba(255,255,255,.13);border-radius:999px;color:#fff}
+.lmh-partner-card h3{font-size:28px;letter-spacing:-.7px;margin:24px 0 5px}
+.lmh-partner-location{color:#888;margin:0 0 20px}
+.lmh-partner-offer{font-size:17px;line-height:1.55;max-width:650px}
+.lmh-partner-actions{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:28px}
+.lmh-partner-actions .lmh-text-link{color:#fff}
+.lmh-empty-state{margin-top:24px;padding:28px;border:1px dashed rgba(255,255,255,.18);border-radius:16px;color:#aaa}
+.lmh-empty-state strong{display:block;color:#fff;font-size:18px;margin-bottom:6px}
+#partner-marketplace{scroll-margin-top:92px}
+@media(max-width:760px){.lmh-partner-grid{grid-template-columns:1fr}.lmh-partner-card{min-height:auto;padding:22px}.lmh-partner-top{align-items:flex-start;flex-direction:column}.lmh-partner-actions{align-items:stretch;flex-direction:column}.lmh-partner-actions .lmh-btn{width:100%}}
