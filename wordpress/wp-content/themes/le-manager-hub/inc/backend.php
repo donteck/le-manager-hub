@@ -217,10 +217,10 @@ final class LMH_Backend {
     return ['eligible'=>$eligible,'status'=>$status,'minimum_level'=>5];
   }
 
-  public static function ambassador_tools($user_id) {
+  public static function member_growth_tools($user_id) {
     $level=self::member_level_number($user_id);
     return [
-      'enabled'=>$level>=5,
+      'enabled'=>true,
       'recruitment_url'=>self::recruitment_url($user_id),
       'smart_qr_url'=>self::member_smart_qr_url($user_id),
       'qr_image_url'=>self::member_qr_image_url($user_id),
@@ -231,6 +231,12 @@ final class LMH_Backend {
       'network'=>self::network_stats($user_id,7),
       'referrals'=>self::referral_stats($user_id)
     ];
+  }
+
+  public static function ambassador_tools($user_id) {
+    $tools=self::member_growth_tools($user_id);
+    $tools['enabled']=self::member_level_number($user_id)>=5;
+    return $tools;
   }
 
   public static function ensure_member_identity_on_login($login,$user) {
