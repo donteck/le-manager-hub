@@ -9,3 +9,13 @@ document.addEventListener('DOMContentLoaded',()=>{
  const search=document.querySelector('#lmh-search');if(search){const initial=new URLSearchParams(location.search);for(const name of ['type','search','country','genre','profession']){const field=search.elements.namedItem(name);if(field&&initial.has(name))field.value=initial.get(name);}let page=1,busy=false;const more=document.querySelector('#directory-more'),results=document.querySelector('#directory-results'),status=document.querySelector('#directory-status');async function load(reset){if(busy)return;busy=true;if(reset){page=1;results.replaceChildren();}status.textContent='Searching…';more.disabled=true;search.querySelector('button').disabled=true;try{const params=new URLSearchParams(new FormData(search));params.set('page',String(page));const data=await api('directory?'+params);for(const item of data.items){const card=document.createElement('article');card.className='lmh-card';const title=document.createElement('h2'),link=document.createElement('a');link.href=item.url;link.textContent=item.name;title.append(link);card.append(title);const p=document.createElement('p');const parsed=new DOMParser().parseFromString(item.excerpt,'text/html');p.textContent=parsed.body.textContent;card.append(p);results.append(card);}status.textContent=data.total?data.total+' connections found.':'No matches. Try another name or category.';more.hidden=page>=data.pages;}catch(err){status.textContent=err.message;}finally{busy=false;more.disabled=false;search.querySelector('button').disabled=false;}}search.addEventListener('submit',e=>{e.preventDefault();load(true);});more.addEventListener('click',()=>{page++;load(false);});load(true);}
  const bookings=document.querySelector('#my-bookings');if(bookings)api('bookings/mine').then(items=>{bookings.replaceChildren();if(!items.length){bookings.textContent='No booking requests yet. Visit an artist or professional to send your first inquiry.';return;}for(const item of items){const p=document.createElement('p');p.className='lmh-card';p.textContent='Request #'+item.id+' · '+item.event_date+' · '+item.budget+' · '+item.status;bookings.append(p);}}).catch(err=>{bookings.textContent=err.message;});
 });
+
+
+/* Local Smart QR renderer — QRCode.js is hosted by Le Manager. */
+document.addEventListener('DOMContentLoaded',function(){
+  document.querySelectorAll('.lmh-local-qr[data-qr]').forEach(function(el){
+    if(typeof QRCode==='undefined'||!el.dataset.qr)return;
+    el.innerHTML='';
+    new QRCode(el,{text:el.dataset.qr,width:240,height:240,colorDark:'#000000',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});
+  });
+});
