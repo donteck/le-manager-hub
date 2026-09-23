@@ -19,3 +19,16 @@ document.addEventListener('DOMContentLoaded',function(){
     new QRCode(el,{text:el.dataset.qr,width:240,height:240,colorDark:'#000000',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});
   });
 });
+
+/* Luxury dashboard submenu: active section + keyboard-friendly tracking. */
+document.addEventListener('DOMContentLoaded',function(){
+  const nav=document.querySelector('.lmh-account-subnav');if(!nav)return;
+  const links=[...nav.querySelectorAll('a[href^="#"]')];
+  const items=links.map(a=>({a,el:document.querySelector(a.getAttribute('href'))})).filter(x=>x.el);
+  if(!items.length)return;
+  const activate=a=>{links.forEach(x=>{x.classList.toggle('is-active',x===a);if(x===a)x.setAttribute('aria-current','location');else x.removeAttribute('aria-current');});a.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});};
+  links.forEach(a=>a.addEventListener('click',()=>activate(a)));
+  const observer=new IntersectionObserver(entries=>{const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];if(!visible)return;const item=items.find(x=>x.el===visible.target);if(item)activate(item.a);},{rootMargin:'-18% 0px -58% 0px',threshold:[0,.15,.35,.6]});
+  items.forEach(x=>observer.observe(x.el));
+  if(location.hash){const a=links.find(x=>x.getAttribute('href')===location.hash);if(a)activate(a);}
+});
