@@ -345,8 +345,9 @@ final class LMH_Backend {
   }
 
   public static function member_qr_image_url($user_id,$size=320) {
-    $size=max(160,min(800,absint($size)));
-    return 'https://api.qrserver.com/v1/create-qr-code/?size='.$size.'x'.$size.'&format=png&margin=12&data='.rawurlencode(self::member_smart_qr_url($user_id));
+    // Kept as an internal compatibility helper. QR rendering is now performed
+    // locally by the theme's bundled QRCode.js; no member QR data is sent to a third party.
+    return self::member_smart_qr_url($user_id);
   }
 
   public static function verification_url($user_id) {
