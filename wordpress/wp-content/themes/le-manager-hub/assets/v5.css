@@ -390,3 +390,7 @@ a[href],button{cursor:pointer}
 .lmh-empty-state strong{display:block;color:#fff;font-size:18px;margin-bottom:6px}
 #partner-marketplace{scroll-margin-top:92px}
 @media(max-width:760px){.lmh-partner-grid{grid-template-columns:1fr}.lmh-partner-card{min-height:auto;padding:22px}.lmh-partner-top{align-items:flex-start;flex-direction:column}.lmh-partner-actions{align-items:stretch;flex-direction:column}.lmh-partner-actions .lmh-btn{width:100%}}
+
+.lmh-partner-use{appearance:none;border:1px solid rgba(255,255,255,.18);background:transparent;color:#fff;border-radius:999px;min-height:42px;padding:0 15px;font-size:9px;font-weight:900;letter-spacing:.7px;cursor:pointer}
+.lmh-partner-use:hover{background:#fff;color:#111}
+.lmh-partner-notice{margin:18px 0;padding:13px 16px;border:1px solid rgba(255,255,255,.12);border-left:3px solid #168447;border-radius:10px;background:rgba(255,255,255,.05);font-size:13px}
