@@ -28,6 +28,7 @@ final class LMH_Backend {
     add_action('admin_post_lmh_qr_image',[__CLASS__,'admin_qr_image']);
     add_action('admin_post_lmh_member_level',[__CLASS__,'admin_member_level']);
     add_action('admin_post_lmh_save_level_rules',[__CLASS__,'admin_save_level_rules']);
+    add_action('admin_post_lmh_save_level_benefits',[__CLASS__,'admin_save_level_benefits']);
     add_action('admin_post_lmh_card_status',[__CLASS__,'admin_card_status']);
     add_action('template_redirect',[__CLASS__,'qr_routes']);
     add_action('init',[__CLASS__,'register_qr_campaign']);
@@ -207,6 +208,13 @@ final class LMH_Backend {
     }
     return $rules;
   }
+
+  public static function level_benefits() {
+    $saved=get_option('lmh_member_level_benefits',[]);$out=[];
+    foreach(self::MEMBER_LEVELS as $n=>$slug){$row=is_array($saved[$n]??null)?$saved[$n]:[];$out[$n]=['title'=>sanitize_text_field($row['title']??ucwords(str_replace('_',' ',$slug))),'benefits'=>sanitize_textarea_field($row['benefits']??''),'discount'=>sanitize_text_field($row['discount']??''),'rewards'=>sanitize_textarea_field($row['rewards']??'')];}
+    return $out;
+  }
+  public static function member_benefits($user_id) {$level=self::member_level_number($user_id);$all=self::level_benefits();return ['level'=>$level,'current'=>$all[$level],'all'=>$all];}
 
   public static function member_activity($user_id) {
     $r=self::referral_stats($user_id);
@@ -537,6 +545,8 @@ final class LMH_Backend {
     $ambassadors=get_users(['number'=>100,'orderby'=>'registered','order'=>'DESC','meta_query'=>[['key'=>'_lmh_member_level','value'=>['ambassador','elite_ambassador','vip'],'compare'=>'IN']]]);
     echo '<div id="ambassadors" style="margin:28px 0"><h2>Ambassador & Physical Card Center</h2><p>Levels 5–7 receive Ambassador tools and become eligible for the Le Manager physical membership card.</p>';
     if($ambassadors){echo '<table class="widefat striped"><thead><tr><th>Member</th><th>LMID</th><th>Level</th><th>Direct Referrals</th><th>Network</th><th>Card Status</th><th>Manage Card</th></tr></thead><tbody>';foreach($ambassadors as $au){$mi=self::member_identity($au->ID);$at=self::ambassador_tools($au->ID);echo '<tr><td><strong>'.esc_html($au->display_name).'</strong></td><td>'.esc_html($mi['id']).'</td><td>'.esc_html($mi['level_number'].' — '.ucwords(str_replace('_',' ',$mi['level']))).'</td><td>'.esc_html($at['referrals']['direct_count']).'</td><td>'.esc_html($at['network']['total_network']).'</td><td><strong>'.esc_html(ucwords(str_replace('_',' ',$at['card']['status']))).'</strong></td><td><form method="post" action="'.esc_url(admin_url('admin-post.php')).'"><input type="hidden" name="action" value="lmh_card_status"><input type="hidden" name="user_id" value="'.esc_attr($au->ID).'">'.wp_nonce_field('lmh_card_status_'.$au->ID,'_wpnonce',true,false).'<select name="status">';foreach(['eligible','requested','approved','production','active','suspended','lost','replaced','expired','revoked'] as $cs)echo '<option value="'.esc_attr($cs).'" '.selected($at['card']['status'],$cs,false).'>'.esc_html(ucwords(str_replace('_',' ',$cs))).'</option>';echo '</select> <button class="button">Update</button></form></td></tr>';}echo '</tbody></table>';}else echo '<p>No Level 5–7 members yet.</p>';echo '</div>';
+    $level_benefits=self::level_benefits();
+    echo '<div id="level-benefits" style="margin:28px 0"><h2>7-Level Benefits & Rewards</h2><p>Configure benefits, discounts and rewards for every membership level. Smart QR and referral tracking remain available to all levels.</p><form method="post" action="'.esc_url(admin_url('admin-post.php')).'"><input type="hidden" name="action" value="lmh_save_level_benefits">'.wp_nonce_field('lmh_save_level_benefits','_wpnonce',true,false).'<div style="overflow:auto"><table class="widefat striped"><thead><tr><th>Level</th><th>Title</th><th>Benefits</th><th>Discount</th><th>Rewards / Recognition</th></tr></thead><tbody>';foreach(self::MEMBER_LEVELS as $ln=>$ls){$b=$level_benefits[$ln];echo '<tr><td><strong>'.esc_html($ln.' — '.ucwords(str_replace('_',' ',$ls))).'</strong></td><td><input name="title['.esc_attr($ln).']" value="'.esc_attr($b['title']).'"></td><td><textarea name="benefits['.esc_attr($ln).']" rows="3">'.esc_textarea($b['benefits']).'</textarea></td><td><input name="discount['.esc_attr($ln).']" value="'.esc_attr($b['discount']).'"></td><td><textarea name="rewards['.esc_attr($ln).']" rows="3">'.esc_textarea($b['rewards']).'</textarea></td></tr>';}echo '</tbody></table></div><p><button class="button button-primary">Save Benefits & Rewards</button></p></form></div>';
     $level_rules=self::level_rules();
     echo '<div id="qualification-rules" style="margin:28px 0"><h2>Membership Qualification Rules</h2><p>Set the minimum verified activity required for each level. Zero means that metric is not required. Rules do not auto-promote members; they identify who qualifies for review so Le Manager keeps control of advancement.</p><form method="post" action="'.esc_url(admin_url('admin-post.php')).'"><input type="hidden" name="action" value="lmh_save_level_rules">'.wp_nonce_field('lmh_save_level_rules','_wpnonce',true,false).'<table class="widefat striped"><thead><tr><th>Level</th><th>Verified Direct Referrals</th><th>Events Attended</th><th>Engagement Points</th></tr></thead><tbody>';foreach(self::MEMBER_LEVELS as $ln=>$ls){echo '<tr><td><strong>'.esc_html($ln.' — '.ucwords(str_replace('_',' ',$ls))).'</strong></td><td><input type="number" min="0" name="referrals['.esc_attr($ln).']" value="'.esc_attr($level_rules[$ln]['referrals']).'"></td><td><input type="number" min="0" name="events['.esc_attr($ln).']" value="'.esc_attr($level_rules[$ln]['events']).'"></td><td><input type="number" min="0" name="engagement['.esc_attr($ln).']" value="'.esc_attr($level_rules[$ln]['engagement']).'"></td></tr>';}echo '</tbody></table><p><button class="button button-primary">Save Qualification Rules</button></p></form></div>';
     echo '<div style="display:flex;gap:12px;flex-wrap:wrap;margin:20px 0">';
@@ -572,6 +582,12 @@ final class LMH_Backend {
       update_user_meta($uid,'_lmh_physical_card_updated_at',current_time('mysql'));
     }
     wp_safe_redirect(admin_url('admin.php?page=lmh-control#ambassadors'));exit;
+  }
+
+  public static function admin_save_level_benefits() {
+    if(!current_user_can('manage_options')) wp_die('Not allowed.');check_admin_referer('lmh_save_level_benefits');$benefits=[];
+    foreach(self::MEMBER_LEVELS as $n=>$slug)$benefits[$n]=['title'=>sanitize_text_field($_POST['title'][$n]??ucwords(str_replace('_',' ',$slug))),'benefits'=>sanitize_textarea_field($_POST['benefits'][$n]??''),'discount'=>sanitize_text_field($_POST['discount'][$n]??''),'rewards'=>sanitize_textarea_field($_POST['rewards'][$n]??'')];
+    update_option('lmh_member_level_benefits',$benefits,false);wp_safe_redirect(admin_url('admin.php?page=lmh-control#level-benefits'));exit;
   }
 
   public static function admin_save_level_rules() {
