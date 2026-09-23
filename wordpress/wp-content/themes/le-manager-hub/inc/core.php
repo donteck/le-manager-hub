@@ -149,6 +149,13 @@ final class LMH_Theme_Core {
 
     $campaign_id=absint($_COOKIE['lmh_campaign_id']??0);
     if($campaign_id && class_exists('LMH_Backend')) LMH_Backend::record_campaign_join($campaign_id,$id);
+    if(!empty($referrer) && $referrer!==$id){
+      if(!get_user_meta($id,'_lmh_referral_credited',true)){
+        update_user_meta($id,'_lmh_referral_credited','1');
+        update_user_meta($id,'_lmh_referral_credited_at',current_time('mysql'));
+        update_user_meta($referrer,'_lmh_member_qr_joins',(int)get_user_meta($referrer,'_lmh_member_qr_joins',true)+1);
+      }
+    }
     if(class_exists('LMH_Backend')) $identity=LMH_Backend::member_identity($id); else $identity=['id'=>(string)get_user_meta($id,'_lmh_member_id',true)];
     return new WP_REST_Response(['success'=>true,'user_id'=>$id,'role'=>$role,'lmid'=>$identity['id']??'','artist_id'=>$artist?:0],201);
   }
