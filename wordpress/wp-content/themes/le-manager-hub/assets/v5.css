@@ -295,3 +295,19 @@ a[href],button{cursor:pointer}
 .lmh-tree-stats span{display:block;margin-top:7px;font-size:9px;font-weight:900;letter-spacing:.7px;color:#aaa;text-transform:uppercase}
 @media(max-width:980px){.lmh-tree-stats{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:520px){.lmh-tree-stats{grid-template-columns:repeat(2,1fr)}}
+
+
+/* MEMBER GROWTH ANALYTICS */
+.lmh-growth-kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:24px 0}
+.lmh-growth-kpis article{background:#0b0b0b;color:#fff;border:1px solid #292929;border-top:3px solid var(--red);border-radius:10px;padding:18px 12px;text-align:center}
+.lmh-growth-kpis strong{display:block;font-size:27px;line-height:1}
+.lmh-growth-kpis span{display:block;color:#999;font-size:9px;font-weight:900;letter-spacing:.7px;text-transform:uppercase;margin-top:8px}
+.lmh-growth-panels{display:grid;grid-template-columns:1.5fr .7fr;gap:16px}
+.lmh-generation-bars{display:grid;gap:12px;margin-top:18px}
+.lmh-generation-bar{display:grid;grid-template-columns:48px 1fr 34px;gap:10px;align-items:center;font-size:11px}
+.lmh-generation-bar>span{font-weight:900}
+.lmh-generation-bar>div{height:9px;background:#e7e7e7;border-radius:999px;overflow:hidden}
+.lmh-generation-bar i{display:block;height:100%;background:var(--red);border-radius:999px;min-width:0}
+.lmh-generation-bar strong{text-align:right}
+@media(max-width:980px){.lmh-growth-kpis{grid-template-columns:repeat(3,1fr)}.lmh-growth-panels{grid-template-columns:1fr}}
+@media(max-width:520px){.lmh-growth-kpis{grid-template-columns:repeat(2,1fr)}}
