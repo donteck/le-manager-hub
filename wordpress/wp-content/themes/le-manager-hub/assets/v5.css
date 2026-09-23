@@ -398,3 +398,9 @@ a[href],button{cursor:pointer}
 .lmh-local-qr{display:inline-flex;align-items:center;justify-content:center;margin:12px 0 16px;padding:12px;background:#fff;border-radius:16px;box-shadow:0 12px 35px rgba(0,0,0,.28)}
 .lmh-local-qr img,.lmh-local-qr canvas{display:block!important;width:240px!important;height:240px!important;max-width:100%;border-radius:5px}
 @media(max-width:420px){.lmh-local-qr img,.lmh-local-qr canvas{width:210px!important;height:210px!important}}
+
+/* Active member dashboard navigation */
+.lmh-account-subnav a.is-active,.lmh-account-subnav a[aria-current="location"]{background:#fff;color:#111;box-shadow:0 6px 20px rgba(0,0,0,.22)}
+.lmh-account-subnav a.is-active:after{content:"";position:absolute;left:50%;bottom:3px;width:4px;height:4px;border-radius:50%;background:#d80a16;transform:translateX(-50%)}
+.lmh-account-subnav a{position:relative}
+@media(prefers-reduced-motion:reduce){.lmh-account-subnav a{scroll-behavior:auto}}
