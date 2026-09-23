@@ -288,3 +288,10 @@ a[href],button{cursor:pointer}
 .lmh-tree-node>.lmh-tree-generation{width:100%}
 .lmh-tree-empty{font-size:10px;color:#888;text-align:center;padding:12px}
 @media(max-width:720px){.lmh-tree-root{margin-left:-10px;margin-right:-10px;padding-left:10px}.lmh-tree-self>summary{width:260px}.lmh-tree-node>summary{width:230px}.lmh-tree-row{justify-content:flex-start}.lmh-tree-generation:before{left:130px}.lmh-tree-generation-label{text-align:left;margin-left:80px}}
+
+.lmh-tree-stats{display:grid;grid-template-columns:repeat(9,minmax(85px,1fr));gap:9px;margin:24px 0}
+.lmh-tree-stats>div{background:#0d0d0d;color:#fff;border:1px solid #292929;border-bottom:3px solid var(--red);border-radius:9px;padding:14px 10px;text-align:center}
+.lmh-tree-stats strong{display:block;font-size:23px;line-height:1}
+.lmh-tree-stats span{display:block;margin-top:7px;font-size:9px;font-weight:900;letter-spacing:.7px;color:#aaa;text-transform:uppercase}
+@media(max-width:980px){.lmh-tree-stats{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:520px){.lmh-tree-stats{grid-template-columns:repeat(2,1fr)}}
