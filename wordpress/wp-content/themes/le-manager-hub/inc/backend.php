@@ -29,6 +29,7 @@ final class LMH_Backend {
     add_action('admin_post_lmh_member_level',[__CLASS__,'admin_member_level']);
     add_action('admin_post_lmh_save_level_rules',[__CLASS__,'admin_save_level_rules']);
     add_action('admin_post_lmh_save_level_benefits',[__CLASS__,'admin_save_level_benefits']);
+    add_action('admin_post_lmh_save_partner',[__CLASS__,'admin_save_partner']);
     add_action('admin_post_lmh_card_status',[__CLASS__,'admin_card_status']);
     add_action('template_redirect',[__CLASS__,'qr_routes']);
     add_action('init',[__CLASS__,'register_qr_campaign']);
@@ -207,6 +208,17 @@ final class LMH_Backend {
       if(isset($saved[$n])&&is_array($saved[$n])) foreach($rules[$n] as $k=>$v)$rules[$n][$k]=max(0,absint($saved[$n][$k]??0));
     }
     return $rules;
+  }
+
+  public static function partners() {
+    $saved=get_option('lmh_partner_network',[]);return is_array($saved)?$saved:[];
+  }
+  public static function admin_save_partner() {
+    if(!current_user_can('manage_options')) wp_die('Not allowed.');check_admin_referer('lmh_save_partner');
+    $name=sanitize_text_field($_POST['name']??'');if(!$name) wp_safe_redirect(admin_url('admin.php?page=lmh-control#partner-network'));
+    $partners=self::partners();$id=sanitize_key($_POST['partner_id']??'');if(!$id)$id='partner_'.wp_generate_password(10,false,false);
+    $partners[$id]=['name'=>$name,'category'=>sanitize_text_field($_POST['category']??''),'location'=>sanitize_text_field($_POST['location']??''),'website'=>esc_url_raw($_POST['website']??''),'offer'=>sanitize_textarea_field($_POST['offer']??''),'levels'=>array_values(array_filter(array_map('absint',(array)($_POST['levels']??[])),fn($n)=>$n>=1&&$n<=7)),'status'=>in_array(($_POST['status']??''),['active','inactive'],true)?$_POST['status']:'active'];
+    update_option('lmh_partner_network',$partners,false);wp_safe_redirect(admin_url('admin.php?page=lmh-control#partner-network'));exit;
   }
 
   public static function level_benefits() {
@@ -545,6 +557,9 @@ final class LMH_Backend {
     $ambassadors=get_users(['number'=>100,'orderby'=>'registered','order'=>'DESC','meta_query'=>[['key'=>'_lmh_member_level','value'=>['ambassador','elite_ambassador','vip'],'compare'=>'IN']]]);
     echo '<div id="ambassadors" style="margin:28px 0"><h2>Ambassador & Physical Card Center</h2><p>Levels 5–7 receive Ambassador tools and become eligible for the Le Manager physical membership card.</p>';
     if($ambassadors){echo '<table class="widefat striped"><thead><tr><th>Member</th><th>LMID</th><th>Level</th><th>Direct Referrals</th><th>Network</th><th>Card Status</th><th>Manage Card</th></tr></thead><tbody>';foreach($ambassadors as $au){$mi=self::member_identity($au->ID);$at=self::ambassador_tools($au->ID);echo '<tr><td><strong>'.esc_html($au->display_name).'</strong></td><td>'.esc_html($mi['id']).'</td><td>'.esc_html($mi['level_number'].' — '.ucwords(str_replace('_',' ',$mi['level']))).'</td><td>'.esc_html($at['referrals']['direct_count']).'</td><td>'.esc_html($at['network']['total_network']).'</td><td><strong>'.esc_html(ucwords(str_replace('_',' ',$at['card']['status']))).'</strong></td><td><form method="post" action="'.esc_url(admin_url('admin-post.php')).'"><input type="hidden" name="action" value="lmh_card_status"><input type="hidden" name="user_id" value="'.esc_attr($au->ID).'">'.wp_nonce_field('lmh_card_status_'.$au->ID,'_wpnonce',true,false).'<select name="status">';foreach(['eligible','requested','approved','production','active','suspended','lost','replaced','expired','revoked'] as $cs)echo '<option value="'.esc_attr($cs).'" '.selected($at['card']['status'],$cs,false).'>'.esc_html(ucwords(str_replace('_',' ',$cs))).'</option>';echo '</select> <button class="button">Update</button></form></td></tr>';}echo '</tbody></table>';}else echo '<p>No Level 5–7 members yet.</p>';echo '</div>';
+    $partners=self::partners();
+    echo '<div id="partner-network" style="margin:28px 0"><h2>Partner Network</h2><p>Register participating businesses and define member offers by membership level.</p><form method="post" action="'.esc_url(admin_url('admin-post.php')).'" style="background:#fff;border:1px solid #dcdcde;padding:18px;margin-bottom:18px"><input type="hidden" name="action" value="lmh_save_partner">'.wp_nonce_field('lmh_save_partner','_wpnonce',true,false).'<p><input required name="name" placeholder="Partner / Business Name" class="regular-text"> <input name="category" placeholder="Category"> <input name="location" placeholder="Location"></p><p><input name="website" type="url" placeholder="Website" class="regular-text"> <select name="status"><option value="active">Active</option><option value="inactive">Inactive</option></select></p><p><textarea name="offer" rows="3" style="width:100%" placeholder="Member offer / discount"></textarea></p><p><strong>Eligible Levels:</strong> ';foreach(self::MEMBER_LEVELS as $ln=>$ls)echo '<label style="margin-right:12px"><input type="checkbox" name="levels[]" value="'.esc_attr($ln).'"> L'.esc_html($ln).'</label>';echo '</p><button class="button button-primary">Add Partner</button></form>';
+    if($partners){echo '<table class="widefat striped"><thead><tr><th>Partner</th><th>Category</th><th>Location</th><th>Offer</th><th>Levels</th><th>Status</th></tr></thead><tbody>';foreach($partners as $pt){echo '<tr><td><strong>'.esc_html($pt['name']).'</strong></td><td>'.esc_html($pt['category']).'</td><td>'.esc_html($pt['location']).'</td><td>'.nl2br(esc_html($pt['offer'])).'</td><td>'.esc_html(implode(', ',array_map(fn($n)=>'L'.$n,$pt['levels']))).'</td><td>'.esc_html(ucfirst($pt['status'])).'</td></tr>';}echo '</tbody></table>';}else echo '<p>No partners have been added yet.</p>';echo '</div>';
     $level_benefits=self::level_benefits();
     echo '<div id="level-benefits" style="margin:28px 0"><h2>7-Level Benefits & Rewards</h2><p>Configure benefits, discounts and rewards for every membership level. Smart QR and referral tracking remain available to all levels.</p><form method="post" action="'.esc_url(admin_url('admin-post.php')).'"><input type="hidden" name="action" value="lmh_save_level_benefits">'.wp_nonce_field('lmh_save_level_benefits','_wpnonce',true,false).'<div style="overflow:auto"><table class="widefat striped"><thead><tr><th>Level</th><th>Title</th><th>Benefits</th><th>Discount</th><th>Rewards / Recognition</th></tr></thead><tbody>';foreach(self::MEMBER_LEVELS as $ln=>$ls){$b=$level_benefits[$ln];echo '<tr><td><strong>'.esc_html($ln.' — '.ucwords(str_replace('_',' ',$ls))).'</strong></td><td><input name="title['.esc_attr($ln).']" value="'.esc_attr($b['title']).'"></td><td><textarea name="benefits['.esc_attr($ln).']" rows="3">'.esc_textarea($b['benefits']).'</textarea></td><td><input name="discount['.esc_attr($ln).']" value="'.esc_attr($b['discount']).'"></td><td><textarea name="rewards['.esc_attr($ln).']" rows="3">'.esc_textarea($b['rewards']).'</textarea></td></tr>';}echo '</tbody></table></div><p><button class="button button-primary">Save Benefits & Rewards</button></p></form></div>';
     $level_rules=self::level_rules();
