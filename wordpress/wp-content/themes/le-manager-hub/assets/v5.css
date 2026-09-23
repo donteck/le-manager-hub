@@ -418,3 +418,8 @@ a[href],button{cursor:pointer}
 .lmh-verify-security{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}.lmh-verify-security span{padding:8px 10px;border:1px solid rgba(255,255,255,.09);border-radius:999px;color:#8d8d8d;font-size:9px;font-weight:750}
 .lmh-verify-foot{text-align:center;margin:18px 0 0;color:#5f5f5f;font-size:9px;letter-spacing:.7px;text-transform:uppercase}
 @media(max-width:600px){.lmh-verify-page{padding:40px 12px 65px}.lmh-verify-pass{padding:30px 22px;border-radius:22px}.lmh-verify-icon{width:55px;height:55px;font-size:27px}.lmh-verify-member>div{align-items:flex-start;flex-direction:column;gap:5px}.lmh-verify-member strong{text-align:left}.lmh-verify-security{flex-direction:column}.lmh-verify-security span{border-radius:10px}}
+
+/* Standalone verification must feel like a secure credential, not a website page. */
+body.lmh-verify-standalone{margin:0;background:#050505}
+body.lmh-verify-standalone .lmh-verify-page{display:grid;align-items:center;min-height:100svh;box-sizing:border-box}
+.lmh-verify-return{text-align:center;margin:22px 0 0}.lmh-verify-return a{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 18px;border:1px solid rgba(255,255,255,.12);border-radius:999px;color:#aaa;text-decoration:none;font-size:9px;font-weight:900;letter-spacing:1.2px}.lmh-verify-return a:hover{background:#fff;color:#111}
