@@ -386,7 +386,7 @@ final class LMH_Backend {
       wp_safe_redirect($join);exit;
     }
     if(isset($_GET['lmh_campaign'])){
-      $campaign=self::campaign_by_code(sanitize_text_field(wp_unslash($_GET['lmh_campaign'])));
+      $campaign=self::campaign_by_code(sanitize_text_field(wp_unslash($_GET['lmh_campaign'])));if($campaign && get_post_meta($campaign->ID,'_lmh_qr_status',true)!=='active'){$campaign=null;}
       if(!$campaign || get_post_meta($campaign->ID,'_lmh_qr_status',true)==='inactive'){status_header(404);return;}
       $cookie='lmh_campaign_seen_'.$campaign->ID;
       if(empty($_COOKIE[$cookie])){
