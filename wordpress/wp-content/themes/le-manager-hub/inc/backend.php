@@ -160,6 +160,16 @@ final class LMH_Backend {
     return ['direct_count'=>count($direct),'direct_user_ids'=>array_map('intval',$direct)];
   }
 
+  public static function referral_history($user_id,$limit=50) {
+    $ids=get_users(['fields'=>'ids','meta_key'=>'_lmh_referrer_user_id','meta_value'=>absint($user_id),'number'=>max(1,min(100,absint($limit))),'orderby'=>'registered','order'=>'DESC']);
+    $items=[];
+    foreach($ids as $id){
+      $u=get_user_by('id',$id);if(!$u)continue;$m=self::member_identity($id);
+      $items[]=['user_id'=>$id,'name'=>$u->display_name,'lmid'=>$m['id'],'level'=>$m['level'],'level_number'=>$m['level_number'],'joined'=>get_user_meta($id,'_lmh_join_at',true)?:$u->user_registered,'source'=>sanitize_key(get_user_meta($id,'_lmh_join_source',true)?:'referral')];
+    }
+    return $items;
+  }
+
   public static function referral_tree($user_id,$max_depth=7,$depth=1,$seen=[]) {
     $user_id=absint($user_id);$max_depth=max(1,min(7,absint($max_depth)));
     if(!$user_id || $depth>$max_depth || in_array($user_id,$seen,true)) return [];
@@ -229,7 +239,8 @@ final class LMH_Backend {
       'qr_conversion_rate'=>($scans=max(0,(int)get_user_meta($user_id,'_lmh_member_qr_scans',true)))?round((max(0,(int)get_user_meta($user_id,'_lmh_member_qr_joins',true))/$scans)*100,1):0,
       'card'=>self::card_eligibility($user_id),
       'network'=>self::network_stats($user_id,7),
-      'referrals'=>self::referral_stats($user_id)
+      'referrals'=>self::referral_stats($user_id),
+      'referral_history'=>self::referral_history($user_id,50)
     ];
   }
 
