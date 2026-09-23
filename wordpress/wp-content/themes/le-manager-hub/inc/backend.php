@@ -25,6 +25,8 @@ final class LMH_Backend {
     add_action('admin_post_lmh_review_profile',[__CLASS__,'review_profile']);
     add_action('admin_post_lmh_booking_status',[__CLASS__,'admin_booking_status']);
     add_action('admin_post_lmh_create_qr_campaign',[__CLASS__,'admin_create_qr_campaign']);
+    add_action('admin_post_lmh_qr_campaign_status',[__CLASS__,'admin_qr_campaign_status']);
+    add_action('admin_post_lmh_delete_qr_campaign',[__CLASS__,'admin_delete_qr_campaign']);
     add_action('admin_post_lmh_qr_image',[__CLASS__,'admin_qr_image']);
     add_action('admin_post_lmh_member_level',[__CLASS__,'admin_member_level']);
     add_action('admin_post_lmh_save_level_rules',[__CLASS__,'admin_save_level_rules']);
@@ -78,6 +80,18 @@ final class LMH_Backend {
       update_post_meta($id,'_lmh_qr_joins',0);
       update_post_meta($id,'_lmh_qr_status','active');
     }
+    wp_safe_redirect(admin_url('admin.php?page=lmh-control#smart-qr'));exit;
+  }
+
+  public static function admin_qr_campaign_status() {
+    if(!current_user_can('manage_options')) wp_die('Not allowed.');$id=absint($_POST['campaign_id']??0);check_admin_referer('lmh_qr_campaign_status_'.$id);
+    if(get_post_type($id)!=='lmh_qr_campaign') wp_die('Campaign not found.');
+    update_post_meta($id,'_lmh_qr_status',($_POST['status']??'')==='active'?'active':'inactive');
+    wp_safe_redirect(admin_url('admin.php?page=lmh-control#smart-qr'));exit;
+  }
+  public static function admin_delete_qr_campaign() {
+    if(!current_user_can('manage_options')) wp_die('Not allowed.');$id=absint($_POST['campaign_id']??0);check_admin_referer('lmh_delete_qr_campaign_'.$id);
+    if(get_post_type($id)!=='lmh_qr_campaign') wp_die('Campaign not found.');wp_trash_post($id);
     wp_safe_redirect(admin_url('admin.php?page=lmh-control#smart-qr'));exit;
   }
 
@@ -565,7 +579,7 @@ final class LMH_Backend {
     echo '<div class="wrap"><h1>Le Manager Control Center</h1><p>Manage the professional network, verification and booking workflow.</p>';
     $campaigns=new WP_Query(['post_type'=>'lmh_qr_campaign','post_status'=>'publish','posts_per_page'=>25,'orderby'=>'date','order'=>'DESC']);
     echo '<div id="smart-qr" style="margin:28px 0"><h2>Smart QR Campaigns</h2><form method="post" action="'.esc_url(admin_url('admin-post.php')).'" style="background:#fff;border:1px solid #dcdcde;padding:16px;margin-bottom:16px"><input type="hidden" name="action" value="lmh_create_qr_campaign">'.wp_nonce_field('lmh_create_qr_campaign','_wpnonce',true,false).'<p><input name="label" class="regular-text" placeholder="Campaign name" required> <input name="artist_id" type="number" min="0" placeholder="Artist post ID"> <input name="referrer_user_id" type="number" min="0" placeholder="Ambassador user ID"> <button class="button button-primary">Create Smart QR Campaign</button></p></form>';
-    if($campaigns->have_posts()){echo '<table class="widefat striped"><thead><tr><th>Campaign</th><th>Code</th><th>Artist</th><th>Scans</th><th>Joins</th><th>Conversion</th><th>URL / Print</th></tr></thead><tbody>';foreach($campaigns->posts as $q){$sc=(int)get_post_meta($q->ID,'_lmh_qr_scans',true);$jo=(int)get_post_meta($q->ID,'_lmh_qr_joins',true);$aid=(int)get_post_meta($q->ID,'_lmh_qr_artist_id',true);$rate=$sc?round(($jo/$sc)*100,1):0;echo '<tr><td>'.esc_html(get_the_title($q)).'</td><td><code>'.esc_html(get_post_meta($q->ID,'_lmh_qr_code',true)).'</code></td><td>'.esc_html($aid?get_the_title($aid):'General').'</td><td>'.esc_html($sc).'</td><td>'.esc_html($jo).'</td><td>'.esc_html($rate).'%</td><td><input class="large-text" readonly value="'.esc_attr(self::campaign_url($q->ID)).'"><br><a class="button" style="margin-top:6px" href="'.esc_url(self::qr_image_url($q->ID)).'">PRINT CARD SVG</a></td></tr>';}echo '</tbody></table>';}else echo '<p>No Smart QR campaigns yet.</p>';echo '</div>';
+    if($campaigns->have_posts()){echo '<table class="widefat striped"><thead><tr><th>Campaign</th><th>Code</th><th>Artist</th><th>Scans</th><th>Joins</th><th>Conversion</th><th>URL / Print</th><th>Status / Actions</th></tr></thead><tbody>';foreach($campaigns->posts as $q){$sc=(int)get_post_meta($q->ID,'_lmh_qr_scans',true);$jo=(int)get_post_meta($q->ID,'_lmh_qr_joins',true);$aid=(int)get_post_meta($q->ID,'_lmh_qr_artist_id',true);$rate=$sc?round(($jo/$sc)*100,1):0;echo '<tr><td>'.esc_html(get_the_title($q)).'</td><td><code>'.esc_html(get_post_meta($q->ID,'_lmh_qr_code',true)).'</code></td><td>'.esc_html($aid?get_the_title($aid):'General').'</td><td>'.esc_html($sc).'</td><td>'.esc_html($jo).'</td><td>'.esc_html($rate).'%</td><td><input class="large-text" readonly value="'.esc_attr(self::campaign_url($q->ID)).'"><br><a class="button" style="margin-top:6px" href="'.esc_url(self::qr_image_url($q->ID)).'">OPEN / PRINT QR CARD</a></td><td><form method="post" action="'.esc_url(admin_url('admin-post.php')).'" style="display:inline-flex;gap:5px"><input type="hidden" name="action" value="lmh_qr_campaign_status"><input type="hidden" name="campaign_id" value="'.esc_attr($q->ID).'">'.wp_nonce_field('lmh_qr_campaign_status_'.$q->ID,'_wpnonce',true,false).'<select name="status"><option value="active" '.selected(get_post_meta($q->ID,'_lmh_qr_status',true),'active',false).'>Active</option><option value="inactive" '.selected(get_post_meta($q->ID,'_lmh_qr_status',true),'inactive',false).'>Inactive</option></select><button class="button">Save</button></form><form method="post" action="'.esc_url(admin_url('admin-post.php')).'" style="display:inline-block;margin-left:5px" onsubmit="return confirm(\'Move this campaign to Trash?\')"><input type="hidden" name="action" value="lmh_delete_qr_campaign"><input type="hidden" name="campaign_id" value="'.esc_attr($q->ID).'">'.wp_nonce_field('lmh_delete_qr_campaign_'.$q->ID,'_wpnonce',true,false).'<button class="button button-link-delete">Trash</button></form></td></tr>';}echo '</tbody></table>';}else echo '<p>No Smart QR campaigns yet.</p>';echo '</div>';
 
     $crm_users=get_users(['number'=>50,'orderby'=>'registered','order'=>'DESC','meta_key'=>'_lmh_join_campaign_id']);
     echo '<div id="fan-crm" style="margin:28px 0"><h2>Fan CRM — Recent QR Members</h2><p>Members attributed to Smart QR campaigns. Contact information is visible only to administrators.</p>';
