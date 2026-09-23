@@ -27,6 +27,7 @@ final class LMH_Backend {
     add_action('admin_post_lmh_create_qr_campaign',[__CLASS__,'admin_create_qr_campaign']);
     add_action('admin_post_lmh_qr_image',[__CLASS__,'admin_qr_image']);
     add_action('admin_post_lmh_member_level',[__CLASS__,'admin_member_level']);
+    add_action('admin_post_lmh_save_level_rules',[__CLASS__,'admin_save_level_rules']);
     add_action('template_redirect',[__CLASS__,'qr_routes']);
     add_action('init',[__CLASS__,'register_qr_campaign']);
   }
@@ -184,6 +185,28 @@ final class LMH_Backend {
     $html='<ul style="margin:8px 0 8px 22px">';
     foreach($nodes as $n){$html.='<li style="margin:8px 0"><strong>'.esc_html($n['name']).'</strong> <code>'.esc_html($n['lmid']).'</code> <span>Level '.esc_html($n['level_number']).' — '.esc_html(ucwords(str_replace('_',' ',$n['level']))).'</span>';if(!empty($n['children']))$html.=self::render_network_nodes($n['children'],$depth+1);$html.='</li>';}
     return $html.'</ul>';
+  }
+
+  public static function level_rules() {
+    $saved=get_option('lmh_member_level_rules',[]);
+    $rules=[];
+    foreach(self::MEMBER_LEVELS as $n=>$slug){
+      $rules[$n]=['referrals'=>0,'events'=>0,'engagement'=>0];
+      if(isset($saved[$n])&&is_array($saved[$n])) foreach($rules[$n] as $k=>$v)$rules[$n][$k]=max(0,absint($saved[$n][$k]??0));
+    }
+    return $rules;
+  }
+
+  public static function member_activity($user_id) {
+    $r=self::referral_stats($user_id);
+    return ['referrals'=>$r['direct_count'],'events'=>max(0,(int)get_user_meta($user_id,'_lmh_events_attended',true)),'engagement'=>max(0,(int)get_user_meta($user_id,'_lmh_engagement_points',true))];
+  }
+
+  public static function qualification_progress($user_id) {
+    $current=self::member_level_number($user_id);$next=$current<7?$current+1:7;$rules=self::level_rules();$activity=self::member_activity($user_id);$req=$rules[$next];
+    $configured=array_sum($req)>0;$met=true;$parts=[];
+    foreach($req as $k=>$needed){$have=$activity[$k]??0;$ok=$needed===0||$have>=$needed;if(!$ok)$met=false;$parts[$k]=['have'=>$have,'needed'=>$needed,'met'=>$ok];}
+    return ['current'=>$current,'next'=>$next,'next_slug'=>self::MEMBER_LEVELS[$next],'configured'=>$configured,'qualified'=>$current===7?true:($configured&&$met),'requirements'=>$parts];
   }
 
   public static function ensure_member_identity_on_login($login,$user) {
@@ -426,6 +449,8 @@ final class LMH_Backend {
     $root_ids=[];foreach($roots as $rmu){$rid=(int)get_user_meta($rmu->ID,'_lmh_referrer_user_id',true);if(!$rid)$root_ids[]=$rmu->ID;}
     echo '<div id="each-one-bring-one" style="margin:28px 0"><h2>Each One Bring One — Network Tree</h2><p>Shows verified referral relationships through seven generations. This is attribution and community-growth tracking; membership advancement remains separately managed.</p>';
     if($root_ids){foreach($root_ids as $root_id){$root=get_user_by('id',$root_id);if(!$root)continue;$mi=self::member_identity($root_id);$ns=self::network_stats($root_id,7);echo '<details style="background:#fff;border:1px solid #dcdcde;padding:14px;margin:10px 0"><summary style="cursor:pointer"><strong>'.esc_html($root->display_name).'</strong> — LMID '.esc_html($mi['id']).' — Level '.esc_html($mi['level_number']).' — Network '.esc_html($ns['total_network']).'</summary>'.self::render_network_nodes($ns['tree']).'</details>';}}else echo '<p>No referral network relationships yet.</p>';echo '</div>';
+    $level_rules=self::level_rules();
+    echo '<div id="qualification-rules" style="margin:28px 0"><h2>Membership Qualification Rules</h2><p>Set the minimum verified activity required for each level. Zero means that metric is not required. Rules do not auto-promote members; they identify who qualifies for review so Le Manager keeps control of advancement.</p><form method="post" action="'.esc_url(admin_url('admin-post.php')).'"><input type="hidden" name="action" value="lmh_save_level_rules">'.wp_nonce_field('lmh_save_level_rules','_wpnonce',true,false).'<table class="widefat striped"><thead><tr><th>Level</th><th>Verified Direct Referrals</th><th>Events Attended</th><th>Engagement Points</th></tr></thead><tbody>';foreach(self::MEMBER_LEVELS as $ln=>$ls){echo '<tr><td><strong>'.esc_html($ln.' — '.ucwords(str_replace('_',' ',$ls))).'</strong></td><td><input type="number" min="0" name="referrals['.esc_attr($ln).']" value="'.esc_attr($level_rules[$ln]['referrals']).'"></td><td><input type="number" min="0" name="events['.esc_attr($ln).']" value="'.esc_attr($level_rules[$ln]['events']).'"></td><td><input type="number" min="0" name="engagement['.esc_attr($ln).']" value="'.esc_attr($level_rules[$ln]['engagement']).'"></td></tr>';}echo '</tbody></table><p><button class="button button-primary">Save Qualification Rules</button></p></form></div>';
     echo '<div style="display:flex;gap:12px;flex-wrap:wrap;margin:20px 0">';
     foreach($counts as $label=>$count) echo '<div style="background:#fff;border:1px solid #dcdcde;padding:16px 22px;min-width:130px"><strong style="font-size:24px">'.esc_html($count).'</strong><br>'.esc_html(ucwords($label)).'</div>';
     echo '</div><h2>Profiles Awaiting Review</h2>';
@@ -447,6 +472,21 @@ final class LMH_Backend {
       } echo '</tbody></table>';
     }
     echo '</div>';
+  }
+
+  public static function admin_save_level_rules() {
+    if(!current_user_can('manage_options')) wp_die('Not allowed.');
+    check_admin_referer('lmh_save_level_rules');
+    $rules=[];
+    foreach(self::MEMBER_LEVELS as $n=>$slug){
+      $rules[$n]=[
+        'referrals'=>max(0,absint($_POST['referrals'][$n]??0)),
+        'events'=>max(0,absint($_POST['events'][$n]??0)),
+        'engagement'=>max(0,absint($_POST['engagement'][$n]??0))
+      ];
+    }
+    update_option('lmh_member_level_rules',$rules,false);
+    wp_safe_redirect(admin_url('admin.php?page=lmh-control#qualification-rules'));exit;
   }
 
   public static function admin_member_level() {
