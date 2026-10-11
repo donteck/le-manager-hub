@@ -277,9 +277,137 @@ final class LMH_Backend {
   }
   public static function member_benefits($user_id) {$level=self::member_level_number($user_id);$all=self::level_benefits();return ['level'=>$level,'current'=>$all[$level],'all'=>$all];}
 
+  /**
+   * Engagement ledger and automatic points engine.
+   *
+   * Points are awarded once per unique activity key. This prevents duplicate
+   * rewards when a hook or callback is retried.
+   */
+  public static function engagement_point_values() {
+    return [
+      'profile_complete'=>5,
+      'activated_referral'=>10,
+      'event_attended'=>10,
+      'event_qr_checkin'=>5,
+      'official_campaign_share'=>2,
+      'official_campaign_engagement'=>1,
+      'member_challenge'=>5,
+      'community_activity'=>5,
+      'ambassador_activated'=>25,
+    ];
+  }
+
+  public static function engagement_points($user_id) {
+    return max(0,(int)get_user_meta(absint($user_id),'_lmh_engagement_points',true));
+  }
+
+  public static function award_engagement_points($user_id,$activity,$unique_key='',$points=null,$context=[]) {
+    $user_id=absint($user_id);$activity=sanitize_key($activity);
+    if(!$user_id || !get_user_by('id',$user_id) || !$activity) return false;
+
+    $values=self::engagement_point_values();
+    if($points===null){
+      if(!isset($values[$activity])) return false;
+      $points=(int)$values[$activity];
+    }
+    $points=(int)$points;
+    if($points<=0) return false;
+
+    $unique_key=sanitize_key($unique_key?:$activity);
+    $ledger=get_user_meta($user_id,'_lmh_engagement_ledger',true);
+    if(!is_array($ledger)) $ledger=[];
+    foreach($ledger as $row){
+      if(($row['key']??'')===$unique_key) return false;
+    }
+
+    $ledger[]=[
+      'key'=>$unique_key,
+      'activity'=>$activity,
+      'points'=>$points,
+      'at'=>current_time('mysql'),
+      'context'=>is_array($context)?array_map('sanitize_text_field',$context):[],
+    ];
+    if(count($ledger)>500) $ledger=array_slice($ledger,-500);
+    update_user_meta($user_id,'_lmh_engagement_ledger',$ledger);
+    update_user_meta($user_id,'_lmh_engagement_points',self::engagement_points($user_id)+$points);
+    do_action('lmh_engagement_points_awarded',$user_id,$activity,$points,$unique_key,$context);
+    return true;
+  }
+
+  public static function record_event_attendance($user_id,$event_key='',$context=[]) {
+    $user_id=absint($user_id);
+    if(!$user_id || !get_user_by('id',$user_id)) return false;
+    $event_key=sanitize_key($event_key?:'event_'.current_time('Ymd'));
+    $events=get_user_meta($user_id,'_lmh_attended_event_keys',true);
+    if(!is_array($events)) $events=[];
+    if(in_array($event_key,$events,true)) return false;
+    $events[]=$event_key;
+    if(count($events)>250) $events=array_slice($events,-250);
+    update_user_meta($user_id,'_lmh_attended_event_keys',$events);
+    update_user_meta($user_id,'_lmh_events_attended',count($events));
+    self::award_engagement_points($user_id,'event_attended','event_attended_'.$event_key,null,$context);
+    do_action('lmh_event_attendance_recorded',$user_id,$event_key,$context);
+    return true;
+  }
+
+  public static function referral_is_followed_through($referred_user_id) {
+    $referred_user_id=absint($referred_user_id);
+    if(!$referred_user_id) return false;
+    $user=get_user_by('id',$referred_user_id);
+    if(!$user) return false;
+    $member_id=(string)get_user_meta($referred_user_id,'_lmh_member_id',true);
+    $status=sanitize_key(get_user_meta($referred_user_id,'_lmh_member_status',true)?:'active');
+    if($member_id==='' || $status!=='active') return false;
+
+    // Fans complete activation when their active LMID account is created.
+    // Professional/company members must also submit an owned profile; admin
+    // approval is intentionally not required for referral follow-through.
+    $roles=(array)$user->roles;
+    if(in_array('lmh_professional',$roles,true) || in_array('lmh_company',$roles,true)){
+      $profiles=get_posts([
+        'post_type'=>['lmh_artist','lmh_professional','lmh_company'],
+        'post_status'=>['pending','publish'],
+        'author'=>$referred_user_id,
+        'meta_key'=>'_lmh_owner_user_id',
+        'meta_value'=>$referred_user_id,
+        'fields'=>'ids',
+        'posts_per_page'=>1,
+        'no_found_rows'=>true,
+      ]);
+      return !empty($profiles);
+    }
+    return true;
+  }
+
+  public static function verified_referral_stats($user_id) {
+    $all=self::referral_stats($user_id);$verified=[];
+    foreach($all['direct_user_ids'] as $referred_id){
+      if(self::referral_is_followed_through($referred_id)) $verified[]=(int)$referred_id;
+    }
+    return ['direct_count'=>count($verified),'direct_user_ids'=>$verified];
+  }
+
+  public static function process_referral_follow_through($referred_user_id) {
+    $referred_user_id=absint($referred_user_id);
+    if(!self::referral_is_followed_through($referred_user_id)) return false;
+    $referrer_id=absint(get_user_meta($referred_user_id,'_lmh_referrer_user_id',true));
+    if(!$referrer_id || $referrer_id===$referred_user_id) return false;
+    return self::award_engagement_points(
+      $referrer_id,
+      'activated_referral',
+      'activated_referral_'.$referred_user_id,
+      null,
+      ['referred_user_id'=>(string)$referred_user_id]
+    );
+  }
+
   public static function member_activity($user_id) {
-    $r=self::referral_stats($user_id);
-    return ['referrals'=>$r['direct_count'],'events'=>max(0,(int)get_user_meta($user_id,'_lmh_events_attended',true)),'engagement'=>max(0,(int)get_user_meta($user_id,'_lmh_engagement_points',true))];
+    $r=self::verified_referral_stats($user_id);
+    return [
+      'referrals'=>$r['direct_count'],
+      'events'=>max(0,(int)get_user_meta($user_id,'_lmh_events_attended',true)),
+      'engagement'=>self::engagement_points($user_id)
+    ];
   }
 
   public static function qualification_progress($user_id) {
@@ -541,6 +669,7 @@ final class LMH_Backend {
     update_post_meta($id,'_lmh_owner_user_id',get_current_user_id());
     update_post_meta($id,'_lmh_verified_level','pending');
     foreach(['city','website','services','booking_email','phone','languages','availability','achievements','portfolio_url','cover_image_url','instagram','tiktok','facebook','x'] as $key) if($data[$key]!=='') update_post_meta($id,'_lmh_'.$key,$data[$key]);
+    self::process_referral_follow_through(get_current_user_id());
     return new WP_REST_Response(['success'=>true,'id'=>$id,'status'=>'pending','verification'=>'pending'],201);
   }
 
