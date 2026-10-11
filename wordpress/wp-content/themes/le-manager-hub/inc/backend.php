@@ -353,9 +353,30 @@ final class LMH_Backend {
   public static function referral_is_followed_through($referred_user_id) {
     $referred_user_id=absint($referred_user_id);
     if(!$referred_user_id) return false;
+    $user=get_user_by('id',$referred_user_id);
+    if(!$user) return false;
     $member_id=(string)get_user_meta($referred_user_id,'_lmh_member_id',true);
     $status=sanitize_key(get_user_meta($referred_user_id,'_lmh_member_status',true)?:'active');
-    return $member_id!=='' && $status==='active';
+    if($member_id==='' || $status!=='active') return false;
+
+    // Fans complete activation when their active LMID account is created.
+    // Professional/company members must also submit an owned profile; admin
+    // approval is intentionally not required for referral follow-through.
+    $roles=(array)$user->roles;
+    if(in_array('lmh_professional',$roles,true) || in_array('lmh_company',$roles,true)){
+      $profiles=get_posts([
+        'post_type'=>['lmh_artist','lmh_professional','lmh_company'],
+        'post_status'=>['pending','publish'],
+        'author'=>$referred_user_id,
+        'meta_key'=>'_lmh_owner_user_id',
+        'meta_value'=>$referred_user_id,
+        'fields'=>'ids',
+        'posts_per_page'=>1,
+        'no_found_rows'=>true,
+      ]);
+      return !empty($profiles);
+    }
+    return true;
   }
 
   public static function verified_referral_stats($user_id) {
@@ -648,6 +669,7 @@ final class LMH_Backend {
     update_post_meta($id,'_lmh_owner_user_id',get_current_user_id());
     update_post_meta($id,'_lmh_verified_level','pending');
     foreach(['city','website','services','booking_email','phone','languages','availability','achievements','portfolio_url','cover_image_url','instagram','tiktok','facebook','x'] as $key) if($data[$key]!=='') update_post_meta($id,'_lmh_'.$key,$data[$key]);
+    self::process_referral_follow_through(get_current_user_id());
     return new WP_REST_Response(['success'=>true,'id'=>$id,'status'=>'pending','verification'=>'pending'],201);
   }
 
